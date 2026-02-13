@@ -2,6 +2,7 @@
 	import type { Game } from '$lib/types';
 
 	export let game: Game;
+	export let onClick: () => void;
 
 	// Calculate target hours (average of main story and main + extras)
 	const targetHours =
@@ -33,7 +34,13 @@
 	const priority = priorityConfig[game.priority];
 </script>
 
-<div class="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-colors cursor-pointer">
+<div
+	class="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-colors cursor-pointer"
+	on:click={onClick}
+	role="button"
+	tabindex="0"
+	on:keydown={(e) => e.key === 'Enter' && onClick()}
+>
 	<!-- Cover Image -->
 	<div class="aspect-[3/4] bg-gray-700 flex items-center justify-center">
 		{#if game.cover_image_url}

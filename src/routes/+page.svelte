@@ -2,10 +2,13 @@
 	import { onMount, getContext } from 'svelte';
 	import { supabase } from '$lib/supabase/client';
 	import GameCard from '$lib/components/GameCard.svelte';
+	import GameDetailModal from '$lib/components/GameDetailModal.svelte';
 	import type { Game } from '$lib/types';
 
 	let games: Game[] = [];
 	let loading = true;
+	let selectedGame: Game | null = null;
+	let showDetailModal = false;
 
 	async function loadGames() {
 		loading = true;
@@ -23,6 +26,20 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	function openGameDetail(game: Game) {
+		selectedGame = game;
+		showDetailModal = true;
+	}
+
+	function closeGameDetail() {
+		showDetailModal = false;
+		selectedGame = null;
+	}
+
+	function handleGameUpdated() {
+		loadGames();
 	}
 
 	onMount(() => {
@@ -51,7 +68,7 @@
 	{:else if games.length > 0}
 		<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
 			{#each games as game (game.id)}
-				<GameCard {game} />
+				<GameCard {game} onClick={() => openGameDetail(game)} />
 			{/each}
 		</div>
 	{:else}
@@ -60,3 +77,10 @@
 		</div>
 	{/if}
 </div>
+
+<GameDetailModal
+	game={selectedGame}
+	open={showDetailModal}
+	onClose={closeGameDetail}
+	onGameUpdated={handleGameUpdated}
+/>
