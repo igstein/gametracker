@@ -1,4 +1,6 @@
 <script lang="ts">
+	export let onAddGame: () => void;
+
 	let activeFilter = 'all';
 
 	const filters = [
@@ -40,6 +42,7 @@
 
 	<div class="p-4">
 		<button
+			on:click={onAddGame}
 			class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
 		>
 			+ Add Game
