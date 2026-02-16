@@ -162,12 +162,21 @@ const remainingHours = Math.max(0, targetHours - game.played_hours);
 
 ## 5. HLTB Service
 
-HowLongToBeat has no official public API. All community wrappers use the same internal search endpoint via web scraping.
+HowLongToBeat has no official public API. All community npm wrappers (`howlongtobeat-core`, `howlongtobeat`) are broken because HLTB rotates its search endpoint URL and auth token. Alternative APIs (RAWG, IGDB) were evaluated but lack usable completion time data. **We use a custom server-side scraper** based on the approach from the working Python library `howlongtobeatpy` (v1.0.20).
+
+### How HLTB Search Works (Three-Step Process)
+1. **Discover search endpoint**: GET `https://howlongtobeat.com/`, find `_app-*.js` script tags, fetch the script, regex-extract the POST endpoint path (e.g. `/api/search`)
+2. **Get auth token**: GET `https://howlongtobeat.com/{search_path}/init?t={timestamp}` returns `{ token: "..." }`
+3. **Search**: POST to `https://howlongtobeat.com/{search_path}` with headers (`x-auth-token`, random user-agent, referer) and JSON body containing `searchTerms`, `searchType: "games"`, etc.
+
+Response JSON has `data[]` with fields: `game_id`, `game_name`, `game_image`, `comp_main` (seconds), `comp_plus` (seconds), `comp_100` (seconds).
 
 ### Implementation
+- Custom scraper in `src/lib/services/hltb.ts` — no external HLTB dependencies
 - HLTB requests are made **server-side** via SvelteKit API routes (`/api/hltb/search`)
 - This avoids CORS issues and keeps the HLTB endpoint details hidden from the client
 - Search queries use debouncing (500ms) to respect rate limits
+- Discovered endpoint + auth token are cached briefly (~30 min) to avoid re-fetching on every search
 
 ### API Route (SvelteKit)
 ```
@@ -187,9 +196,11 @@ Response: [
 
 ### Important Notes
 - The HLTB endpoint is **undocumented** and may change at any time
+- The endpoint discovery + auth token approach mirrors how the maintained Python library works
 - Fallback: Games can be added manually with a custom target time
 - Cover images are referenced by URL (not stored in Supabase to save storage)
 - Times from HLTB come in seconds and must be converted to hours
+- No npm dependencies for HLTB — uses Node built-in `fetch` only
 
 ---
 
