@@ -8,6 +8,7 @@
 
 	let games: Game[] = [];
 	let loading = true;
+	let error = '';
 	let selectedGame: Game | null = null;
 	let showDetailModal = false;
 
@@ -94,17 +95,23 @@
 
 	async function loadGames() {
 		loading = true;
+		error = '';
 		try {
-			const { data: gamesData, error } = await supabase
+			const { data: gamesData, error: loadError } = await supabase
 				.from('games')
 				.select('*')
 				.order('created_at', { ascending: false });
 
-			if (error) throw error;
+			if (loadError) {
+				console.error('Error loading games:', loadError);
+				error = loadError.message;
+				throw loadError;
+			}
 
 			games = gamesData || [];
-		} catch (error) {
-			console.error('Error loading games:', error);
+		} catch (e) {
+			console.error('Error loading games:', e);
+			error = e instanceof Error ? e.message : 'Failed to load games';
 		} finally {
 			loading = false;
 		}
@@ -196,7 +203,20 @@
 		</div>
 	</div>
 
-	{#if loading}
+	{#if error}
+		<div class="text-center py-20">
+			<div class="bg-red-900/20 border border-red-900 rounded-lg p-6 max-w-lg mx-auto">
+				<p class="text-red-400 font-medium mb-2">Error loading games</p>
+				<p class="text-red-300 text-sm">{error}</p>
+				<button
+					on:click={loadGames}
+					class="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+				>
+					Retry
+				</button>
+			</div>
+		</div>
+	{:else if loading}
 		<div class="text-center py-20 text-gray-500">
 			<p class="text-lg">Loading games...</p>
 		</div>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { authStore } from '$lib/stores/auth';
+
 	export let onAddGame: () => void;
 	export let onFilterChange: (filter: string) => void;
 	export let activeFilter: string = 'all';
@@ -13,6 +15,10 @@
 
 	function setFilter(filterId: string) {
 		onFilterChange(filterId);
+	}
+
+	async function handleSignOut() {
+		await authStore.signOut();
 	}
 </script>
 
@@ -40,12 +46,21 @@
 		</ul>
 	</nav>
 
-	<div class="p-4">
+	<div class="p-4 space-y-2">
 		<button
 			on:click={onAddGame}
 			class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
 		>
 			+ Add Game
 		</button>
+		<button
+			on:click={handleSignOut}
+			class="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition-colors"
+		>
+			Sign Out
+		</button>
+		{#if $authStore.user?.email}
+			<p class="text-gray-500 text-xs text-center truncate px-2">{$authStore.user.email}</p>
+		{/if}
 	</div>
 </aside>

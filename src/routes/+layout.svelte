@@ -2,8 +2,10 @@
 	import '../app.css';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import AddGameModal from '$lib/components/AddGameModal.svelte';
+	import Auth from '$lib/components/Auth.svelte';
 	import { writable } from 'svelte/store';
-	import { setContext } from 'svelte';
+	import { setContext, onMount } from 'svelte';
+	import { authStore, initAuth } from '$lib/stores/auth';
 
 	const showAddGameModal = writable(false);
 	const activeFilter = writable<string>('all');
@@ -35,17 +37,29 @@
 	function handleFilterChange(filter: string) {
 		activeFilter.set(filter);
 	}
+
+	onMount(() => {
+		initAuth();
+	});
 </script>
 
-<div class="flex h-screen bg-gray-900">
-	<Sidebar onAddGame={openAddGameModal} onFilterChange={handleFilterChange} activeFilter={$activeFilter} />
-	<main class="flex-1 overflow-y-auto">
-		<slot />
-	</main>
-</div>
+{#if $authStore.loading}
+	<div class="min-h-screen bg-gray-900 flex items-center justify-center">
+		<p class="text-gray-400 text-lg">Loading...</p>
+	</div>
+{:else if !$authStore.user}
+	<Auth />
+{:else}
+	<div class="flex h-screen bg-gray-900">
+		<Sidebar onAddGame={openAddGameModal} onFilterChange={handleFilterChange} activeFilter={$activeFilter} />
+		<main class="flex-1 overflow-y-auto">
+			<slot />
+		</main>
+	</div>
 
-<AddGameModal
-	open={$showAddGameModal}
-	onClose={closeAddGameModal}
-	onGameAdded={handleGameAdded}
-/>
+	<AddGameModal
+		open={$showAddGameModal}
+		onClose={closeAddGameModal}
+		onGameAdded={handleGameAdded}
+	/>
+{/if}

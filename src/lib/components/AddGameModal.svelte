@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabase/client';
+	import { authStore } from '$lib/stores/auth';
 	import type { GameStatus, GamePriority, HLTBSearchResult } from '$lib/types';
 
 	export let open = false;
@@ -74,10 +75,14 @@
 		error = '';
 
 		try {
-			const tempUserId = '00000000-0000-0000-0000-000000000000';
+			if (!$authStore.user) {
+				error = 'You must be logged in to add games';
+				saving = false;
+				return;
+			}
 
 			const { error: insertError } = await supabase.from('games').insert({
-				user_id: tempUserId,
+				user_id: $authStore.user.id,
 				title: result.title,
 				hltb_id: result.id,
 				cover_image_url: result.imageUrl,
@@ -111,13 +116,17 @@
 		error = '';
 
 		try {
-			const tempUserId = '00000000-0000-0000-0000-000000000000';
+			if (!$authStore.user) {
+				error = 'You must be logged in to add games';
+				saving = false;
+				return;
+			}
 
 			const mainStory = targetHours * 0.85;
 			const mainPlusExtras = targetHours * 1.15;
 
 			const { error: insertError } = await supabase.from('games').insert({
-				user_id: tempUserId,
+				user_id: $authStore.user.id,
 				title: title.trim(),
 				played_hours: playedHours,
 				main_story_hours: mainStory,

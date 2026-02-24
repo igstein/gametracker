@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabase/client';
+	import { authStore } from '$lib/stores/auth';
 	import type { Game, GameStatus, GamePriority, GameNote } from '$lib/types';
 
 	export let game: Game | null;
@@ -143,9 +144,15 @@
 		error = '';
 
 		try {
+			if (!$authStore.user) {
+				error = 'You must be logged in to save notes';
+				saving = false;
+				return;
+			}
+
 			const noteData = {
 				game_id: game.id,
-				user_id: '00000000-0000-0000-0000-000000000000', // Temp user ID
+				user_id: $authStore.user.id,
 				title: noteTitle.trim() || null,
 				content: noteContent.trim()
 			};
