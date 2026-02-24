@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { supabase } from '$lib/supabase/client';
 	import { authStore } from '$lib/stores/auth';
 	import type { Game, GameStatus, GamePriority, GameNote } from '$lib/types';
+	import type { RealtimeChannel } from '@supabase/supabase-js';
 
 	export let game: Game | null;
 	export let open = false;
@@ -22,6 +24,7 @@
 	let noteTitle = '';
 	let noteContent = '';
 	let editingNoteId: string | null = null;
+	let notesRealtimeChannel: RealtimeChannel | null = null;
 
 	// Update local values when game changes
 	$: if (game) {
@@ -35,6 +38,13 @@
 		noteContent = '';
 		editingNoteId = null;
 		loadNotes();
+		setupNotesRealtimeSubscription();
+	}
+
+	// Clean up when modal closes
+	$: if (!open && notesRealtimeChannel) {
+		supabase.removeChannel(notesRealtimeChannel);
+		notesRealtimeChannel = null;
 	}
 
 	// Calculate target hours
@@ -211,6 +221,45 @@
 		}
 	}
 
+	function setupNotesRealtimeSubscription() {
+		if (!game) return;
+
+		// Remove existing subscription if any
+		if (notesRealtimeChannel) {
+			supabase.removeChannel(notesRealtimeChannel);
+		}
+
+		// Subscribe to changes for this game's notes
+		notesRealtimeChannel = supabase
+			.channel(`game-notes-${game.id}`)
+			.on(
+				'postgres_changes',
+				{
+					event: '*',
+					schema: 'public',
+					table: 'game_notes',
+					filter: `game_id=eq.${game.id}`
+				},
+				(payload) => {
+					console.log('Note realtime update:', payload);
+
+					if (payload.eventType === 'INSERT') {
+						const newNote = payload.new as GameNote;
+						notes = [newNote, ...notes];
+					} else if (payload.eventType === 'UPDATE') {
+						const updatedNote = payload.new as GameNote;
+						notes = notes.map((n) => (n.id === updatedNote.id ? updatedNote : n));
+					} else if (payload.eventType === 'DELETE') {
+						const deletedNote = payload.old as GameNote;
+						notes = notes.filter((n) => n.id !== deletedNote.id);
+					}
+				}
+			)
+			.subscribe((status) => {
+				console.log('Notes realtime status:', status);
+			});
+	}
+
 	function formatDate(dateString: string): string {
 		const date = new Date(dateString);
 		return date.toLocaleDateString('en-US', {
@@ -219,6 +268,13 @@
 			day: 'numeric'
 		});
 	}
+
+	onDestroy(() => {
+		// Clean up Realtime subscription
+		if (notesRealtimeChannel) {
+			supabase.removeChannel(notesRealtimeChannel);
+		}
+	});
 </script>
 
 {#if open && game}

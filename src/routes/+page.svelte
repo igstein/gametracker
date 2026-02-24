@@ -1,16 +1,19 @@
 <script lang="ts">
-	import { onMount, getContext } from 'svelte';
+	import { onMount, onDestroy, getContext } from 'svelte';
 	import { supabase } from '$lib/supabase/client';
 	import GameCard from '$lib/components/GameCard.svelte';
 	import GameDetailModal from '$lib/components/GameDetailModal.svelte';
 	import type { Game } from '$lib/types';
 	import type { Writable } from 'svelte/store';
+	import type { RealtimeChannel } from '@supabase/supabase-js';
 
 	let games: Game[] = [];
 	let loading = true;
 	let error = '';
 	let selectedGame: Game | null = null;
 	let showDetailModal = false;
+	let realtimeChannel: RealtimeChannel | null = null;
+	let realtimeConnected = false;
 
 	const activeFilter = getContext<Writable<string>>('activeFilter');
 	const sortBy = getContext<Writable<string>>('sortBy');
@@ -131,8 +134,57 @@
 		loadGames();
 	}
 
+	function setupRealtimeSubscription() {
+		// Create a channel for games table
+		realtimeChannel = supabase
+			.channel('games-changes')
+			.on(
+				'postgres_changes',
+				{
+					event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+					schema: 'public',
+					table: 'games'
+				},
+				(payload) => {
+					console.log('Realtime update:', payload);
+
+					if (payload.eventType === 'INSERT') {
+						// New game added from another device
+						const newGame = payload.new as Game;
+						games = [newGame, ...games];
+					} else if (payload.eventType === 'UPDATE') {
+						// Game updated from another device
+						const updatedGame = payload.new as Game;
+						games = games.map((g) => (g.id === updatedGame.id ? updatedGame : g));
+						// Update selected game if it's open
+						if (selectedGame && selectedGame.id === updatedGame.id) {
+							selectedGame = updatedGame;
+						}
+					} else if (payload.eventType === 'DELETE') {
+						// Game deleted from another device
+						const deletedGame = payload.old as Game;
+						games = games.filter((g) => g.id !== deletedGame.id);
+						// Close detail modal if deleted game is open
+						if (selectedGame && selectedGame.id === deletedGame.id) {
+							closeGameDetail();
+						}
+					}
+				}
+			)
+			.subscribe((status) => {
+				if (status === 'SUBSCRIBED') {
+					console.log('Realtime connected');
+					realtimeConnected = true;
+				} else if (status === 'CLOSED') {
+					console.log('Realtime disconnected');
+					realtimeConnected = false;
+				}
+			});
+	}
+
 	onMount(() => {
 		loadGames();
+		setupRealtimeSubscription();
 
 		// Register callback for when games are added
 		const registerCallback = getContext<(callback: () => void) => void>(
@@ -142,9 +194,26 @@
 			registerCallback(loadGames);
 		}
 	});
+
+	onDestroy(() => {
+		// Clean up Realtime subscription
+		if (realtimeChannel) {
+			supabase.removeChannel(realtimeChannel);
+		}
+	});
 </script>
 
 <div class="p-8">
+	<!-- Realtime Connection Status -->
+	{#if realtimeConnected}
+		<div
+			class="fixed bottom-4 right-4 bg-green-900/80 border border-green-700 text-green-200 px-3 py-2 rounded-lg text-xs flex items-center gap-2 backdrop-blur-sm"
+		>
+			<span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+			Live sync active
+		</div>
+	{/if}
+
 	{#if !loading && nextUpGames.length > 0}
 		<div class="mb-8">
 			<h2 class="text-xl font-bold text-white mb-4">🎯 Next Up</h2>
