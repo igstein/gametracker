@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabase/client';
-	import type { Game, GameStatus, GamePriority } from '$lib/types';
+	import type { Game, GameStatus, GamePriority, GameNote } from '$lib/types';
 
 	export let game: Game | null;
 	export let open = false;
@@ -14,12 +14,26 @@
 	let saving = false;
 	let error = '';
 
+	// Journal state
+	let notes: GameNote[] = [];
+	let loadingNotes = false;
+	let showAddNote = false;
+	let noteTitle = '';
+	let noteContent = '';
+	let editingNoteId: string | null = null;
+
 	// Update local values when game changes
 	$: if (game) {
 		status = game.status;
 		priority = game.priority;
 		hoursToAdd = 0;
 		minutesToAdd = 0;
+		// Reset note form state
+		showAddNote = false;
+		noteTitle = '';
+		noteContent = '';
+		editingNoteId = null;
+		loadNotes();
 	}
 
 	// Calculate target hours
@@ -77,6 +91,126 @@
 		if (e.target === e.currentTarget) {
 			onClose();
 		}
+	}
+
+	// Journal functions
+	async function loadNotes() {
+		if (!game) return;
+
+		loadingNotes = true;
+		try {
+			const { data, error: fetchError } = await supabase
+				.from('game_notes')
+				.select('*')
+				.eq('game_id', game.id)
+				.order('created_at', { ascending: false });
+
+			if (fetchError) throw fetchError;
+
+			notes = data || [];
+		} catch (e) {
+			console.error('Error loading notes:', e);
+		} finally {
+			loadingNotes = false;
+		}
+	}
+
+	function openAddNote() {
+		noteTitle = '';
+		noteContent = '';
+		editingNoteId = null;
+		showAddNote = true;
+	}
+
+	function openEditNote(note: GameNote) {
+		noteTitle = note.title || '';
+		noteContent = note.content;
+		editingNoteId = note.id;
+		showAddNote = true;
+	}
+
+	function cancelNoteEdit() {
+		showAddNote = false;
+		noteTitle = '';
+		noteContent = '';
+		editingNoteId = null;
+	}
+
+	async function saveNote() {
+		if (!game || !noteContent.trim()) return;
+
+		saving = true;
+		error = '';
+
+		try {
+			const noteData = {
+				game_id: game.id,
+				user_id: '00000000-0000-0000-0000-000000000000', // Temp user ID
+				title: noteTitle.trim() || null,
+				content: noteContent.trim()
+			};
+
+			if (editingNoteId) {
+				// Update existing note
+				const { error: updateError } = await supabase
+					.from('game_notes')
+					.update({
+						title: noteData.title,
+						content: noteData.content,
+						updated_at: new Date().toISOString()
+					})
+					.eq('id', editingNoteId);
+
+				if (updateError) {
+					console.error('Update error:', updateError);
+					throw updateError;
+				}
+			} else {
+				// Create new note
+				const { error: insertError } = await supabase
+					.from('game_notes')
+					.insert(noteData);
+
+				if (insertError) {
+					console.error('Insert error:', insertError);
+					throw insertError;
+				}
+			}
+
+			await loadNotes();
+			cancelNoteEdit();
+		} catch (e) {
+			console.error('Save note error:', e);
+			error = e instanceof Error ? e.message : 'Failed to save note';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function deleteNote(noteId: string) {
+		if (!confirm('Delete this journal entry?')) return;
+
+		try {
+			const { error: deleteError } = await supabase
+				.from('game_notes')
+				.delete()
+				.eq('id', noteId);
+
+			if (deleteError) throw deleteError;
+
+			await loadNotes();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to delete note';
+		}
+	}
+
+	function formatDate(dateString: string): string {
+		const date = new Date(dateString);
+		return date.toLocaleDateString('en-US', {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric'
+		});
 	}
 </script>
 
@@ -202,6 +336,96 @@
 					</button>
 				</div>
 			</form>
+
+			<!-- Journal Section -->
+			<div class="mt-8 pt-8 border-t border-gray-700">
+				<div class="flex justify-between items-center mb-4">
+					<h3 class="text-lg font-bold text-white">📝 Journal</h3>
+					{#if !showAddNote}
+						<button
+							on:click={openAddNote}
+							class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+						>
+							+ Add Entry
+						</button>
+					{/if}
+				</div>
+
+				<!-- Add/Edit Note Form -->
+				{#if showAddNote}
+					<div class="bg-gray-700 rounded-lg p-4 mb-4">
+						<div class="space-y-3">
+							<input
+								type="text"
+								bind:value={noteTitle}
+								placeholder="Title (optional)"
+								class="w-full px-3 py-2 bg-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+							/>
+							<textarea
+								bind:value={noteContent}
+								placeholder="What's on your mind about this game?"
+								rows="4"
+								class="w-full px-3 py-2 bg-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
+							></textarea>
+							<div class="flex gap-2">
+								<button
+									on:click={cancelNoteEdit}
+									disabled={saving}
+									class="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+								>
+									Cancel
+								</button>
+								<button
+									on:click={saveNote}
+									disabled={saving || !noteContent.trim()}
+									class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+								>
+									{saving ? 'Saving...' : editingNoteId ? 'Update' : 'Save'}
+								</button>
+							</div>
+						</div>
+					</div>
+				{/if}
+
+				<!-- Notes List -->
+				{#if loadingNotes}
+					<p class="text-gray-400 text-sm text-center py-4">Loading journal entries...</p>
+				{:else if notes.length > 0}
+					<div class="space-y-4">
+						{#each notes as note (note.id)}
+							<div class="bg-gray-700 rounded-lg p-4">
+								<div class="flex justify-between items-start mb-2">
+									<div class="flex-1">
+										{#if note.title}
+											<h4 class="text-white font-medium text-sm mb-1">{note.title}</h4>
+										{/if}
+										<p class="text-gray-400 text-xs">{formatDate(note.created_at)}</p>
+									</div>
+									<div class="flex gap-2">
+										<button
+											on:click={() => openEditNote(note)}
+											class="text-blue-400 hover:text-blue-300 text-xs"
+										>
+											Edit
+										</button>
+										<button
+											on:click={() => deleteNote(note.id)}
+											class="text-red-400 hover:text-red-300 text-xs"
+										>
+											Delete
+										</button>
+									</div>
+								</div>
+								<p class="text-gray-300 text-sm whitespace-pre-wrap">{note.content}</p>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<p class="text-gray-500 text-sm text-center py-8">
+						No journal entries yet. Click "Add Entry" to start tracking your thoughts about this game.
+					</p>
+				{/if}
+			</div>
 		</div>
 	</div>
 {/if}
