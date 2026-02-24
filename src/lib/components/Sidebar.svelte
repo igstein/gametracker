@@ -1,7 +1,7 @@
 <script lang="ts">
 	export let onAddGame: () => void;
-
-	let activeFilter = 'all';
+	export let onFilterChange: (filter: string) => void;
+	export let activeFilter: string = 'all';
 
 	const filters = [
 		{ id: 'all', label: 'All', icon: '🎮' },
@@ -12,7 +12,7 @@
 	];
 
 	function setFilter(filterId: string) {
-		activeFilter = filterId;
+		onFilterChange(filterId);
 	}
 </script>
 

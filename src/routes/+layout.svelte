@@ -6,12 +6,17 @@
 	import { setContext } from 'svelte';
 
 	const showAddGameModal = writable(false);
+	const activeFilter = writable<string>('all');
+	const sortBy = writable<string>('created_at_desc');
 
 	let onGameAddedCallback: (() => void) | null = null;
 
 	setContext('registerGameAddedCallback', (callback: () => void) => {
 		onGameAddedCallback = callback;
 	});
+
+	setContext('activeFilter', activeFilter);
+	setContext('sortBy', sortBy);
 
 	function openAddGameModal() {
 		showAddGameModal.set(true);
@@ -26,10 +31,14 @@
 			onGameAddedCallback();
 		}
 	}
+
+	function handleFilterChange(filter: string) {
+		activeFilter.set(filter);
+	}
 </script>
 
 <div class="flex h-screen bg-gray-900">
-	<Sidebar onAddGame={openAddGameModal} />
+	<Sidebar onAddGame={openAddGameModal} onFilterChange={handleFilterChange} activeFilter={$activeFilter} />
 	<main class="flex-1 overflow-y-auto">
 		<slot />
 	</main>
