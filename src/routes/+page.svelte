@@ -6,6 +6,16 @@
 	import type { Game } from '$lib/types';
 	import type { Writable } from 'svelte/store';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
+	import { isOnline } from '$lib/stores/network';
+	import {
+		initDB,
+		saveGamesToLocal,
+		getGamesFromLocal,
+		saveGameToLocal,
+		deleteGameFromLocal,
+		getSyncQueue,
+		removeFromSyncQueue
+	} from '$lib/services/offline';
 
 	let games: Game[] = [];
 	let loading = true;
@@ -100,24 +110,90 @@
 		loading = true;
 		error = '';
 		try {
-			const { data: gamesData, error: loadError } = await supabase
-				.from('games')
-				.select('*')
-				.order('created_at', { ascending: false });
+			if ($isOnline) {
+				// Online: load from Supabase and cache locally
+				const { data: gamesData, error: loadError } = await supabase
+					.from('games')
+					.select('*')
+					.order('created_at', { ascending: false });
 
-			if (loadError) {
-				console.error('Error loading games:', loadError);
-				error = loadError.message;
-				throw loadError;
+				if (loadError) {
+					console.error('Error loading games:', loadError);
+					error = loadError.message;
+					throw loadError;
+				}
+
+				games = gamesData || [];
+
+				// Cache in IndexedDB
+				await saveGamesToLocal(games);
+			} else {
+				// Offline: load from IndexedDB
+				console.log('[Offline] Loading games from local cache');
+				games = await getGamesFromLocal();
 			}
-
-			games = gamesData || [];
 		} catch (e) {
 			console.error('Error loading games:', e);
 			error = e instanceof Error ? e.message : 'Failed to load games';
+
+			// Try loading from cache as fallback
+			try {
+				games = await getGamesFromLocal();
+				error = 'Loaded from offline cache';
+			} catch {
+				games = [];
+			}
 		} finally {
 			loading = false;
 		}
+	}
+
+	async function processSyncQueue() {
+		if (!$isOnline) return;
+
+		try {
+			const queue = await getSyncQueue();
+			console.log(`[Sync] Processing ${queue.length} queued operations`);
+
+			for (const item of queue) {
+				try {
+					if (item.table === 'games') {
+						if (item.operation === 'insert') {
+							await supabase.from('games').insert(item.data);
+						} else if (item.operation === 'update') {
+							await supabase.from('games').update(item.data).eq('id', item.data.id);
+						} else if (item.operation === 'delete') {
+							await supabase.from('games').delete().eq('id', item.data.id);
+						}
+					} else if (item.table === 'game_notes') {
+						if (item.operation === 'insert') {
+							await supabase.from('game_notes').insert(item.data);
+						} else if (item.operation === 'update') {
+							await supabase.from('game_notes').update(item.data).eq('id', item.data.id);
+						} else if (item.operation === 'delete') {
+							await supabase.from('game_notes').delete().eq('id', item.data.id);
+						}
+					}
+
+					// Remove from queue after successful sync
+					await removeFromSyncQueue(item.id);
+					console.log('[Sync] Synced:', item);
+				} catch (e) {
+					console.error('[Sync] Failed to sync item:', item, e);
+					// Keep in queue for retry
+				}
+			}
+
+			// Reload data after sync
+			await loadGames();
+		} catch (e) {
+			console.error('[Sync] Failed to process queue:', e);
+		}
+	}
+
+	// Watch for online/offline changes
+	$: if ($isOnline) {
+		processSyncQueue();
 	}
 
 	function openGameDetail(game: Game) {
@@ -182,9 +258,17 @@
 			});
 	}
 
-	onMount(() => {
+	onMount(async () => {
+		// Initialize IndexedDB
+		await initDB();
+
 		loadGames();
 		setupRealtimeSubscription();
+
+		// Process any pending sync queue items
+		if ($isOnline) {
+			processSyncQueue();
+		}
 
 		// Register callback for when games are added
 		const registerCallback = getContext<(callback: () => void) => void>(

@@ -2,8 +2,15 @@
 	import { onDestroy } from 'svelte';
 	import { supabase } from '$lib/supabase/client';
 	import { authStore } from '$lib/stores/auth';
+	import { isOnline } from '$lib/stores/network';
 	import type { Game, GameStatus, GamePriority, GameNote } from '$lib/types';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
+	import {
+		saveNoteToLocal,
+		deleteNoteFromLocal,
+		getNotesFromLocal,
+		addToSyncQueue
+	} from '$lib/services/offline';
 
 	export let game: Game | null;
 	export let open = false;
@@ -110,17 +117,32 @@
 
 		loadingNotes = true;
 		try {
-			const { data, error: fetchError } = await supabase
-				.from('game_notes')
-				.select('*')
-				.eq('game_id', game.id)
-				.order('created_at', { ascending: false });
+			if ($isOnline) {
+				// Online: load from Supabase
+				const { data, error: fetchError } = await supabase
+					.from('game_notes')
+					.select('*')
+					.eq('game_id', game.id)
+					.order('created_at', { ascending: false });
 
-			if (fetchError) throw fetchError;
+				if (fetchError) throw fetchError;
 
-			notes = data || [];
+				notes = data || [];
+			} else {
+				// Offline: load from IndexedDB
+				console.log('[Offline] Loading notes from local cache');
+				notes = await getNotesFromLocal(game.id);
+				notes.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+			}
 		} catch (e) {
 			console.error('Error loading notes:', e);
+			// Try loading from cache as fallback
+			try {
+				notes = await getNotesFromLocal(game.id);
+				notes.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+			} catch {
+				notes = [];
+			}
 		} finally {
 			loadingNotes = false;
 		}
@@ -169,28 +191,61 @@
 
 			if (editingNoteId) {
 				// Update existing note
-				const { error: updateError } = await supabase
-					.from('game_notes')
-					.update({
-						title: noteData.title,
-						content: noteData.content,
-						updated_at: new Date().toISOString()
-					})
-					.eq('id', editingNoteId);
+				const updatedNote = {
+					...noteData,
+					id: editingNoteId,
+					updated_at: new Date().toISOString()
+				};
 
-				if (updateError) {
-					console.error('Update error:', updateError);
-					throw updateError;
+				if ($isOnline) {
+					const { error: updateError } = await supabase
+						.from('game_notes')
+						.update({
+							title: updatedNote.title,
+							content: updatedNote.content,
+							updated_at: updatedNote.updated_at
+						})
+						.eq('id', editingNoteId);
+
+					if (updateError) {
+						console.error('Update error:', updateError);
+						throw updateError;
+					}
+				} else {
+					// Offline: save to IndexedDB and queue
+					console.log('[Offline] Queuing note update');
+					await saveNoteToLocal(updatedNote as GameNote);
+					await addToSyncQueue({
+						operation: 'update',
+						table: 'game_notes',
+						data: updatedNote
+					});
 				}
 			} else {
 				// Create new note
-				const { error: insertError } = await supabase
-					.from('game_notes')
-					.insert(noteData);
+				const newNote = {
+					...noteData,
+					id: crypto.randomUUID(),
+					created_at: new Date().toISOString(),
+					updated_at: new Date().toISOString()
+				};
 
-				if (insertError) {
-					console.error('Insert error:', insertError);
-					throw insertError;
+				if ($isOnline) {
+					const { error: insertError } = await supabase.from('game_notes').insert(noteData);
+
+					if (insertError) {
+						console.error('Insert error:', insertError);
+						throw insertError;
+					}
+				} else {
+					// Offline: save to IndexedDB and queue
+					console.log('[Offline] Queuing note insert');
+					await saveNoteToLocal(newNote as GameNote);
+					await addToSyncQueue({
+						operation: 'insert',
+						table: 'game_notes',
+						data: newNote
+					});
 				}
 			}
 
@@ -208,12 +263,23 @@
 		if (!confirm('Delete this journal entry?')) return;
 
 		try {
-			const { error: deleteError } = await supabase
-				.from('game_notes')
-				.delete()
-				.eq('id', noteId);
+			if ($isOnline) {
+				const { error: deleteError } = await supabase
+					.from('game_notes')
+					.delete()
+					.eq('id', noteId);
 
-			if (deleteError) throw deleteError;
+				if (deleteError) throw deleteError;
+			} else {
+				// Offline: delete from IndexedDB and queue
+				console.log('[Offline] Queuing note delete');
+				await deleteNoteFromLocal(noteId);
+				await addToSyncQueue({
+					operation: 'delete',
+					table: 'game_notes',
+					data: { id: noteId }
+				});
+			}
 
 			await loadNotes();
 		} catch (e) {
