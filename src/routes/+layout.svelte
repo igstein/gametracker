@@ -14,6 +14,7 @@
 	const activeFilter = writable<string>('all');
 	const sortBy = writable<string>('created_at_desc');
 	let showShortcutsHelp = false;
+	let mobileSidebarOpen = false;
 
 	let onGameAddedCallback: (() => void) | null = null;
 
@@ -148,10 +149,38 @@
 	{/if}
 
 	<div class="flex h-screen bg-gray-50 dark:bg-gray-900" class:pt-10={$showOfflineBanner}>
-		<Sidebar onAddGame={openAddGameModal} onFilterChange={handleFilterChange} activeFilter={$activeFilter} />
-		<main class="flex-1 overflow-y-auto">
-			<slot />
-		</main>
+		<Sidebar
+			onAddGame={openAddGameModal}
+			onFilterChange={handleFilterChange}
+			activeFilter={$activeFilter}
+			mobileOpen={mobileSidebarOpen}
+			onMobileClose={() => (mobileSidebarOpen = false)}
+			onDataImported={handleGameAdded}
+		/>
+		<div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+			<!-- Mobile header -->
+			<header class="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+				<button
+					on:click={() => (mobileSidebarOpen = true)}
+					class="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+					aria-label="Open menu"
+				>
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+					</svg>
+				</button>
+				<span class="font-bold text-gray-900 dark:text-white">GameTracker</span>
+				<button
+					on:click={openAddGameModal}
+					class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+				>
+					+ Add
+				</button>
+			</header>
+			<main class="flex-1 overflow-y-auto">
+				<slot />
+			</main>
+		</div>
 	</div>
 
 	<AddGameModal
