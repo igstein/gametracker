@@ -395,4 +395,5 @@
 	open={showDetailModal}
 	onClose={closeGameDetail}
 	onGameUpdated={handleGameUpdated}
+	onGameDeleted={handleGameUpdated}
 />

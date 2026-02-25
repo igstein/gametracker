@@ -8,6 +8,7 @@
 	import {
 		saveNoteToLocal,
 		deleteNoteFromLocal,
+		deleteGameFromLocal,
 		getNotesFromLocal,
 		addToSyncQueue
 	} from '$lib/services/offline';
@@ -16,6 +17,7 @@
 	export let open = false;
 	export let onClose: () => void;
 	export let onGameUpdated: () => void;
+	export let onGameDeleted: () => void = () => {};
 
 	let hoursToAdd = 0;
 	let minutesToAdd = 0;
@@ -23,6 +25,7 @@
 	let priority: GamePriority = 'medium';
 	let saving = false;
 	let error = '';
+	let confirmingDelete = false;
 
 	// Journal state
 	let notes: GameNote[] = [];
@@ -44,6 +47,7 @@
 		noteTitle = '';
 		noteContent = '';
 		editingNoteId = null;
+		confirmingDelete = false;
 		loadNotes();
 		setupNotesRealtimeSubscription();
 	}
@@ -108,6 +112,39 @@
 	function handleBackdropClick(e: MouseEvent) {
 		if (e.target === e.currentTarget) {
 			onClose();
+		}
+	}
+
+	async function handleDelete() {
+		if (!game) return;
+
+		saving = true;
+		error = '';
+
+		try {
+			if ($isOnline) {
+				const { error: deleteError } = await supabase
+					.from('games')
+					.delete()
+					.eq('id', game.id);
+
+				if (deleteError) throw deleteError;
+			} else {
+				await deleteGameFromLocal(game.id);
+				await addToSyncQueue({
+					operation: 'delete',
+					table: 'games',
+					data: { id: game.id }
+				});
+			}
+
+			onGameDeleted();
+			onClose();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to delete game';
+			confirmingDelete = false;
+		} finally {
+			saving = false;
 		}
 	}
 
@@ -464,6 +501,42 @@
 						{saving ? 'Updating...' : 'Update Game'}
 					</button>
 				</div>
+
+				<!-- Delete -->
+				{#if !confirmingDelete}
+					<button
+						type="button"
+						on:click={() => (confirmingDelete = true)}
+						disabled={saving}
+						class="w-full mt-2 px-4 py-2 text-red-400 hover:text-red-300 text-sm transition-colors disabled:opacity-50"
+					>
+						Delete game
+					</button>
+				{:else}
+					<div class="mt-2 p-4 bg-red-900/30 border border-red-700 rounded-lg">
+						<p class="text-red-300 text-sm font-medium mb-3">
+							Delete "{game.title}"? This cannot be undone.
+						</p>
+						<div class="flex gap-3">
+							<button
+								type="button"
+								on:click={() => (confirmingDelete = false)}
+								disabled={saving}
+								class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								on:click={handleDelete}
+								disabled={saving}
+								class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+							>
+								{saving ? 'Deleting...' : 'Yes, delete'}
+							</button>
+						</div>
+					</div>
+				{/if}
 			</form>
 
 			<!-- Journal Section -->
