@@ -63,7 +63,7 @@
 				<div class="{progressColor} h-full transition-all" style="width: {progress}%"></div>
 			</div>
 			<div class="flex justify-between text-xs text-gray-600 dark:text-gray-400">
-				<span>{game.played_hours}h / {targetHours.toFixed(0)}h</span>
+				<span>{Math.round(game.played_hours * 10) / 10}h / {targetHours.toFixed(0)}h</span>
 				<span>{progress.toFixed(0)}%</span>
 			</div>
 		</div>
