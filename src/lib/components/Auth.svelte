@@ -234,47 +234,47 @@
 	});
 </script>
 
-<div class="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-	<div class="bg-gray-800 rounded-lg p-8 max-w-md w-full">
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+	<div class="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-md w-full border border-gray-200 dark:border-gray-700">
 		<div class="text-center mb-8">
-			<h1 class="text-3xl font-bold text-white mb-2">🎮 GameTracker</h1>
-			<p class="text-gray-400">Track your progress and finish what you started</p>
+			<h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">🎮 GameTracker</h1>
+			<p class="text-gray-600 dark:text-gray-400">Track your progress and finish what you started</p>
 		</div>
 
 		<form on:submit|preventDefault={handleSubmit} class="space-y-4">
 			<div>
-				<label for="email" class="block text-sm font-medium text-gray-300 mb-2">Email</label>
+				<label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
 				<input
 					id="email"
 					type="email"
 					bind:value={email}
 					disabled={loading}
 					placeholder="you@example.com"
-					class="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
+					class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
 				/>
 			</div>
 
 			<div>
-				<label for="password" class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+				<label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
 				<input
 					id="password"
 					type="password"
 					bind:value={password}
 					disabled={loading}
 					placeholder="••••••••"
-					class="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
+					class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
 				/>
 
 				{#if mode === 'signup' && password}
 					<!-- Password Strength Indicator -->
 					<div class="mt-2">
 						<div class="flex items-center justify-between mb-1">
-							<span class="text-xs text-gray-400">Password strength:</span>
+							<span class="text-xs text-gray-600 dark:text-gray-400">Password strength:</span>
 							<span class="text-xs font-medium {passwordStrength.color}">
 								{passwordStrength.label}
 							</span>
 						</div>
-						<div class="w-full h-1.5 bg-gray-600 rounded-full overflow-hidden">
+						<div class="w-full h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden">
 							<div
 								class="h-full transition-all duration-300 {passwordStrength.score === 1
 									? 'bg-red-500 w-1/4'
@@ -291,55 +291,55 @@
 
 					<!-- Password Requirements -->
 					<div class="mt-3 space-y-1">
-						<p class="text-xs text-gray-400 mb-1">Requirements:</p>
+						<p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Requirements:</p>
 						<div class="grid grid-cols-2 gap-1 text-xs">
 							<div class="flex items-center gap-1.5">
 								<span
 									class="{passwordStrength.requirements.length
-										? 'text-green-400'
-										: 'text-gray-500'}"
+										? 'text-green-600 dark:text-green-400'
+										: 'text-gray-400 dark:text-gray-500'}"
 								>
 									{passwordStrength.requirements.length ? '✓' : '○'}
 								</span>
-								<span class="text-gray-400">8+ characters</span>
+								<span class="text-gray-600 dark:text-gray-400">8+ characters</span>
 							</div>
 							<div class="flex items-center gap-1.5">
 								<span
 									class="{passwordStrength.requirements.uppercase
-										? 'text-green-400'
-										: 'text-gray-500'}"
+										? 'text-green-600 dark:text-green-400'
+										: 'text-gray-400 dark:text-gray-500'}"
 								>
 									{passwordStrength.requirements.uppercase ? '✓' : '○'}
 								</span>
-								<span class="text-gray-400">Uppercase (A-Z)</span>
+								<span class="text-gray-600 dark:text-gray-400">Uppercase (A-Z)</span>
 							</div>
 							<div class="flex items-center gap-1.5">
 								<span
 									class="{passwordStrength.requirements.lowercase
-										? 'text-green-400'
-										: 'text-gray-500'}"
+										? 'text-green-600 dark:text-green-400'
+										: 'text-gray-400 dark:text-gray-500'}"
 								>
 									{passwordStrength.requirements.lowercase ? '✓' : '○'}
 								</span>
-								<span class="text-gray-400">Lowercase (a-z)</span>
+								<span class="text-gray-600 dark:text-gray-400">Lowercase (a-z)</span>
 							</div>
 							<div class="flex items-center gap-1.5">
 								<span
-									class="{passwordStrength.requirements.number ? 'text-green-400' : 'text-gray-500'}"
+									class="{passwordStrength.requirements.number ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}"
 								>
 									{passwordStrength.requirements.number ? '✓' : '○'}
 								</span>
-								<span class="text-gray-400">Number (0-9)</span>
+								<span class="text-gray-600 dark:text-gray-400">Number (0-9)</span>
 							</div>
 							<div class="flex items-center gap-1.5 col-span-2">
 								<span
 									class="{passwordStrength.requirements.special
-										? 'text-green-400'
-										: 'text-gray-500'}"
+										? 'text-green-600 dark:text-green-400'
+										: 'text-gray-400 dark:text-gray-500'}"
 								>
 									{passwordStrength.requirements.special ? '✓' : '○'}
 								</span>
-								<span class="text-gray-400">Special character (!@#$...)</span>
+								<span class="text-gray-600 dark:text-gray-400">Special character (!@#$...)</span>
 							</div>
 						</div>
 					</div>
@@ -347,10 +347,10 @@
 			</div>
 
 			{#if error}
-				<div class="text-red-400 text-sm bg-red-900/20 border border-red-900 rounded-lg p-3">
+				<div class="text-red-700 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-lg p-3">
 					{error}
 					{#if lockoutUntil && remainingLockoutTime > 0}
-						<div class="mt-2 text-xs text-red-300">
+						<div class="mt-2 text-xs text-red-600 dark:text-red-300">
 							⏱ Retry in: {formatLockoutTime(remainingLockoutTime)}
 						</div>
 					{/if}
@@ -358,7 +358,7 @@
 			{/if}
 
 			{#if message}
-				<div class="text-green-400 text-sm bg-green-900/20 border border-green-900 rounded-lg p-3">
+				<div class="text-green-700 dark:text-green-400 text-sm bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900 rounded-lg p-3">
 					{message}
 				</div>
 			{/if}
@@ -382,7 +382,7 @@
 			<button
 				on:click={toggleMode}
 				disabled={loading}
-				class="text-blue-400 hover:text-blue-300 text-sm disabled:opacity-50"
+				class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm disabled:opacity-50"
 			>
 				{mode === 'signin'
 					? "Don't have an account? Sign up"

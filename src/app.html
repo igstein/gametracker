@@ -3,7 +3,32 @@
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+		<!-- PWA Manifest -->
+		<link rel="manifest" href="%sveltekit.assets%/manifest.json" />
+
+		<!-- iOS Meta Tags -->
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="apple-mobile-web-app-title" content="GameTracker" />
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/icon-192.png" />
+
+		<!-- Theme Color -->
+		<meta name="theme-color" content="#2563eb" />
+		<meta name="description" content="Track your game progress and finish what you started" />
+
+		<!-- Blocking theme script: must run before paint to prevent flash -->
+		<script>
+			(function () {
+				var stored = localStorage.getItem('theme');
+				var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+				if (stored === 'dark' || (!stored && prefersDark)) {
+					document.documentElement.classList.add('dark');
+				}
+			})();
+		</script>
+
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

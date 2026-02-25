@@ -35,14 +35,14 @@
 </script>
 
 <div
-	class="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-colors cursor-pointer"
+	class="bg-white dark:bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors cursor-pointer border border-gray-200 dark:border-gray-700"
 	on:click={onClick}
 	role="button"
 	tabindex="0"
 	on:keydown={(e) => e.key === 'Enter' && onClick()}
 >
 	<!-- Cover Image -->
-	<div class="aspect-[3/4] bg-gray-700 flex items-center justify-center">
+	<div class="aspect-[3/4] bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
 		{#if game.cover_image_url}
 			<img src={game.cover_image_url} alt={game.title} class="w-full h-full object-cover" />
 		{:else}
@@ -53,16 +53,16 @@
 	<!-- Game Info -->
 	<div class="p-4">
 		<div class="flex items-start justify-between gap-2 mb-3">
-			<h3 class="font-semibold text-white text-sm line-clamp-2 flex-1">{game.title}</h3>
+			<h3 class="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2 flex-1">{game.title}</h3>
 			<span class="text-xl {priority.color} flex-shrink-0">{priority.icon}</span>
 		</div>
 
 		<!-- Progress Bar -->
 		<div class="space-y-2">
-			<div class="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+			<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
 				<div class="{progressColor} h-full transition-all" style="width: {progress}%"></div>
 			</div>
-			<div class="flex justify-between text-xs text-gray-400">
+			<div class="flex justify-between text-xs text-gray-600 dark:text-gray-400">
 				<span>{game.played_hours}h / {targetHours.toFixed(0)}h</span>
 				<span>{progress.toFixed(0)}%</span>
 			</div>

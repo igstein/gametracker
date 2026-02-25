@@ -291,24 +291,24 @@
 	<!-- Realtime Connection Status -->
 	{#if realtimeConnected}
 		<div
-			class="fixed bottom-4 right-4 bg-green-900/80 border border-green-700 text-green-200 px-3 py-2 rounded-lg text-xs flex items-center gap-2 backdrop-blur-sm"
+			class="fixed bottom-4 right-4 bg-green-100 dark:bg-green-900/80 border border-green-300 dark:border-green-700 text-green-900 dark:text-green-200 px-3 py-2 rounded-lg text-xs flex items-center gap-2 backdrop-blur-sm"
 		>
-			<span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+			<span class="w-2 h-2 bg-green-600 dark:bg-green-400 rounded-full animate-pulse"></span>
 			Live sync active
 		</div>
 	{/if}
 
 	{#if !loading && nextUpGames.length > 0}
 		<div class="mb-8">
-			<h2 class="text-xl font-bold text-white mb-4">🎯 Next Up</h2>
-			<p class="text-gray-400 text-sm mb-4">
+			<h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">🎯 Next Up</h2>
+			<p class="text-gray-600 dark:text-gray-400 text-sm mb-4">
 				Games with the shortest remaining time — finish these first!
 			</p>
 			<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 				{#each nextUpGames as game (game.id)}
 					<button
 						on:click={() => openGameDetail(game)}
-						class="flex items-center gap-4 p-4 bg-gray-800 border border-gray-700 rounded-lg hover:border-blue-500 transition-colors text-left"
+						class="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 transition-colors text-left"
 					>
 						{#if game.cover_image_url}
 							<img
@@ -317,13 +317,13 @@
 								class="w-16 h-20 object-cover rounded"
 							/>
 						{:else}
-							<div class="w-16 h-20 bg-gray-700 rounded flex items-center justify-center">
+							<div class="w-16 h-20 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
 								<span class="text-3xl">🎮</span>
 							</div>
 						{/if}
 						<div class="flex-1 min-w-0">
-							<h3 class="text-white font-medium truncate">{game.title}</h3>
-							<p class="text-gray-400 text-sm">
+							<h3 class="text-gray-900 dark:text-white font-medium truncate">{game.title}</h3>
+							<p class="text-gray-600 dark:text-gray-400 text-sm">
 								{getRemainingHours(game).toFixed(1)}h remaining
 							</p>
 						</div>
@@ -335,15 +335,15 @@
 
 	<div class="mb-8 flex justify-between items-center">
 		<div>
-			<h2 class="text-2xl font-bold text-white mb-2">Your Games</h2>
-			<p class="text-gray-400">Track your progress and finish what you started</p>
+			<h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Your Games</h2>
+			<p class="text-gray-600 dark:text-gray-400">Track your progress and finish what you started</p>
 		</div>
 		<div class="flex items-center gap-2">
-			<label for="sort-select" class="text-gray-400 text-sm">Sort by:</label>
+			<label for="sort-select" class="text-gray-600 dark:text-gray-400 text-sm">Sort by:</label>
 			<select
 				id="sort-select"
 				bind:value={$sortBy}
-				class="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+				class="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
 			>
 				<option value="created_at_desc">Recently Added</option>
 				<option value="name_asc">Name (A-Z)</option>
@@ -358,9 +358,9 @@
 
 	{#if error}
 		<div class="text-center py-20">
-			<div class="bg-red-900/20 border border-red-900 rounded-lg p-6 max-w-lg mx-auto">
-				<p class="text-red-400 font-medium mb-2">Error loading games</p>
-				<p class="text-red-300 text-sm">{error}</p>
+			<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-lg p-6 max-w-lg mx-auto">
+				<p class="text-red-700 dark:text-red-400 font-medium mb-2">Error loading games</p>
+				<p class="text-red-600 dark:text-red-300 text-sm">{error}</p>
 				<button
 					on:click={loadGames}
 					class="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
@@ -370,7 +370,7 @@
 			</div>
 		</div>
 	{:else if loading}
-		<div class="text-center py-20 text-gray-500">
+		<div class="text-center py-20 text-gray-500 dark:text-gray-500">
 			<p class="text-lg">Loading games...</p>
 		</div>
 	{:else if filteredAndSortedGames.length > 0}
@@ -380,11 +380,11 @@
 			{/each}
 		</div>
 	{:else if games.length > 0}
-		<div class="text-center py-20 text-gray-500">
+		<div class="text-center py-20 text-gray-500 dark:text-gray-500">
 			<p class="text-lg">No games match the current filter.</p>
 		</div>
 	{:else}
-		<div class="text-center py-20 text-gray-500">
+		<div class="text-center py-20 text-gray-500 dark:text-gray-500">
 			<p class="text-lg">No games yet. Click "Add Game" to get started!</p>
 		</div>
 	{/if}
