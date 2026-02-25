@@ -4,6 +4,7 @@
 	import { authStore } from '$lib/stores/auth';
 	import { isOnline } from '$lib/stores/network';
 	import type { Game, GameStatus, GamePriority, GameNote } from '$lib/types';
+	import { getTargetHours } from '$lib/utils';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
 		saveNoteToLocal,
@@ -26,6 +27,8 @@
 	let saving = false;
 	let error = '';
 	let confirmingDelete = false;
+	let editingTarget = false;
+	let customTargetInput = 0;
 
 	// Journal state
 	let notes: GameNote[] = [];
@@ -48,6 +51,8 @@
 		noteContent = '';
 		editingNoteId = null;
 		confirmingDelete = false;
+		editingTarget = false;
+		customTargetInput = 0;
 		loadNotes();
 		setupNotesRealtimeSubscription();
 	}
@@ -58,10 +63,7 @@
 		notesRealtimeChannel = null;
 	}
 
-	// Calculate target hours
-	$: targetHours = game?.main_story_hours && game?.main_plus_extras_hours
-		? (game.main_story_hours + game.main_plus_extras_hours) / 2
-		: 50;
+	$: targetHours = game ? getTargetHours(game) : 50;
 
 	// Calculate progress
 	$: progress = game ? Math.min(100, (game.played_hours / targetHours) * 100) : 0;
@@ -143,6 +145,45 @@
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to delete game';
 			confirmingDelete = false;
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function saveCustomTarget() {
+		if (!game) return;
+		saving = true;
+		error = '';
+		try {
+			const { error: updateError } = await supabase
+				.from('games')
+				.update({ custom_target_hours: customTargetInput })
+				.eq('id', game.id);
+			if (updateError) throw updateError;
+			game = { ...game, custom_target_hours: customTargetInput };
+			editingTarget = false;
+			onGameUpdated();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to update target';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function clearCustomTarget() {
+		if (!game) return;
+		saving = true;
+		error = '';
+		try {
+			const { error: updateError } = await supabase
+				.from('games')
+				.update({ custom_target_hours: null })
+				.eq('id', game.id);
+			if (updateError) throw updateError;
+			game = { ...game, custom_target_hours: null };
+			onGameUpdated();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to reset target';
 		} finally {
 			saving = false;
 		}
@@ -410,7 +451,49 @@
 				</div>
 				<div class="flex justify-between text-sm">
 					<span class="text-white font-semibold">{game.played_hours.toFixed(1)} hours played</span>
-					<span class="text-gray-400">Target: {targetHours.toFixed(0)} hours</span>
+					<div class="flex items-center gap-2">
+						{#if editingTarget}
+							<input
+								type="number"
+								bind:value={customTargetInput}
+								min="1"
+								step="0.5"
+								class="w-24 px-2 py-1 bg-gray-600 text-white text-sm rounded focus:ring-2 focus:ring-blue-500 outline-none"
+							/>
+							<span class="text-gray-400 text-sm">h</span>
+							<button
+								type="button"
+								on:click={saveCustomTarget}
+								disabled={saving}
+								class="text-blue-400 hover:text-blue-300 text-xs disabled:opacity-50"
+							>Save</button>
+							<button
+								type="button"
+								on:click={() => (editingTarget = false)}
+								class="text-gray-500 hover:text-gray-400 text-xs"
+							>Cancel</button>
+						{:else}
+							<span class="text-gray-400">
+								Target: {targetHours.toFixed(0)}h
+								{#if game.custom_target_hours != null}
+									<span class="text-xs text-yellow-500 ml-1">(custom)</span>
+								{/if}
+							</span>
+							<button
+								type="button"
+								on:click={() => { customTargetInput = targetHours; editingTarget = true; }}
+								class="text-gray-500 hover:text-gray-300 text-xs"
+							>Edit</button>
+							{#if game.custom_target_hours != null}
+								<button
+									type="button"
+									on:click={clearCustomTarget}
+									disabled={saving}
+									class="text-gray-500 hover:text-gray-300 text-xs disabled:opacity-50"
+								>Reset to HLTB</button>
+							{/if}
+						{/if}
+					</div>
 				</div>
 			</div>
 

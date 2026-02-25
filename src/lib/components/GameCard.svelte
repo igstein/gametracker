@@ -1,14 +1,11 @@
 <script lang="ts">
 	import type { Game } from '$lib/types';
+	import { getTargetHours } from '$lib/utils';
 
 	export let game: Game;
 	export let onClick: () => void;
 
-	// Calculate target hours (average of main story and main + extras)
-	const targetHours =
-		game.main_story_hours && game.main_plus_extras_hours
-			? (game.main_story_hours + game.main_plus_extras_hours) / 2
-			: 50; // Default fallback
+	const targetHours = getTargetHours(game);
 
 	// Calculate progress percentage
 	const progress = Math.min(100, (game.played_hours / targetHours) * 100);

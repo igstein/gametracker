@@ -13,6 +13,7 @@ export interface Game {
 	status: GameStatus;
 	priority: GamePriority;
 	last_played?: string;
+	custom_target_hours?: number | null;
 }
 
 export interface GameNote {

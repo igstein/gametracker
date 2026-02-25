@@ -4,6 +4,7 @@
 	import GameCard from '$lib/components/GameCard.svelte';
 	import GameDetailModal from '$lib/components/GameDetailModal.svelte';
 	import type { Game } from '$lib/types';
+	import { getTargetHours } from '$lib/utils';
 	import type { Writable } from 'svelte/store';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import { isOnline } from '$lib/stores/network';
@@ -27,14 +28,6 @@
 
 	const activeFilter = getContext<Writable<string>>('activeFilter');
 	const sortBy = getContext<Writable<string>>('sortBy');
-
-	// Helper to calculate target hours
-	function getTargetHours(game: Game): number {
-		if (game.main_story_hours && game.main_plus_extras_hours) {
-			return (game.main_story_hours + game.main_plus_extras_hours) / 2;
-		}
-		return game.main_story_hours || game.main_plus_extras_hours || 50;
-	}
 
 	// Helper to calculate progress percentage
 	function getProgress(game: Game): number {
