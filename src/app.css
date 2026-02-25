@@ -2,3 +2,11 @@
 
 /* Tailwind v4: class-based dark mode */
 @variant dark (&:where(.dark, .dark *));
+
+/* iOS safe area utilities */
+.safe-top {
+	padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+.safe-left {
+	padding-left: max(0px, env(safe-area-inset-left));
+}

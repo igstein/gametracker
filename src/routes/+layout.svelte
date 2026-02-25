@@ -159,7 +159,7 @@
 		/>
 		<div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 			<!-- Mobile header -->
-			<header class="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+			<header class="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 safe-top">
 				<button
 					on:click={() => (mobileSidebarOpen = true)}
 					class="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"

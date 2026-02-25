@@ -129,7 +129,7 @@
 
 <aside
 	class="
-		fixed inset-y-0 left-0 z-40 w-64 flex flex-col
+		fixed inset-y-0 left-0 z-40 w-64 flex flex-col safe-left
 		bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700
 		transition-transform duration-200
 		{mobileOpen ? 'translate-x-0' : '-translate-x-full'}
