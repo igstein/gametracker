@@ -6,43 +6,59 @@ interface AuthState {
 	user: User | null;
 	session: Session | null;
 	loading: boolean;
+	requiresPasswordReset: boolean;
 }
 
 function createAuthStore() {
 	const { subscribe, set, update } = writable<AuthState>({
 		user: null,
 		session: null,
-		loading: true
+		loading: true,
+		requiresPasswordReset: false
 	});
 
 	return {
 		subscribe,
 		setUser: (user: User | null, session: Session | null) => {
-			set({ user, session, loading: false });
+			set({ user, session, loading: false, requiresPasswordReset: false });
 		},
 		setLoading: (loading: boolean) => {
 			update((state) => ({ ...state, loading }));
 		},
+		setPasswordRecovery: (user: User | null, session: Session | null) => {
+			set({ user, session, loading: false, requiresPasswordReset: true });
+		},
+		clearPasswordRecovery: () => {
+			update((state) => ({ ...state, requiresPasswordReset: false }));
+		},
 		signOut: async () => {
 			await supabase.auth.signOut();
-			set({ user: null, session: null, loading: false });
+			set({ user: null, session: null, loading: false, requiresPasswordReset: false });
 		}
 	};
 }
 
 export const authStore = createAuthStore();
 
-// Initialize auth state and listen for changes
+// Set up listener at module load time — must happen before initAuth()
+// so we never miss the PASSWORD_RECOVERY event regardless of timing
+supabase.auth.onAuthStateChange((event, session) => {
+	if (event === 'PASSWORD_RECOVERY') {
+		authStore.setPasswordRecovery(session?.user ?? null, session);
+	} else {
+		authStore.setUser(session?.user ?? null, session);
+	}
+});
+
 export async function initAuth() {
-	// Get initial session
 	const {
 		data: { session }
 	} = await supabase.auth.getSession();
 
-	authStore.setUser(session?.user ?? null, session);
-
-	// Listen for auth changes
-	supabase.auth.onAuthStateChange((_event, session) => {
-		authStore.setUser(session?.user ?? null, session);
+	// Only set user from session if we're not already in password recovery mode
+	// (the onAuthStateChange above handles PASSWORD_RECOVERY)
+	authStore.update((state) => {
+		if (state.requiresPasswordReset) return state;
+		return { ...state, user: session?.user ?? null, session, loading: false };
 	});
 }

@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabase/client';
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 
-	let mode: 'signin' | 'signup' = 'signin';
+	let mode: 'signin' | 'signup' | 'forgot' = 'signin';
 	let email = '';
 	let password = '';
+	let confirmPassword = '';
 	let loading = false;
 	let error = '';
 	let message = '';
@@ -48,33 +50,21 @@
 		let color = '';
 
 		if (metRequirements === 0) {
-			score = 0;
-			label = '';
-			color = '';
+			score = 0; label = ''; color = '';
 		} else if (metRequirements <= 2) {
-			score = 1;
-			label = 'Weak';
-			color = 'text-red-400';
+			score = 1; label = 'Weak'; color = 'text-red-400';
 		} else if (metRequirements <= 3) {
-			score = 2;
-			label = 'Fair';
-			color = 'text-yellow-400';
+			score = 2; label = 'Fair'; color = 'text-yellow-400';
 		} else if (metRequirements === 4) {
-			score = 3;
-			label = 'Good';
-			color = 'text-blue-400';
+			score = 3; label = 'Good'; color = 'text-blue-400';
 		} else {
-			score = 4;
-			label = 'Strong';
-			color = 'text-green-400';
+			score = 4; label = 'Strong'; color = 'text-green-400';
 		}
 
 		passwordStrength = { score, label, color, requirements };
 	}
 
-	$: if (mode === 'signup') {
-		validatePassword(password);
-	}
+	$: if (mode === 'signup') validatePassword(password);
 
 	// Check lockout status
 	function checkLockout(): boolean {
@@ -82,10 +72,7 @@
 			updateRemainingTime();
 			return true;
 		}
-		if (lockoutUntil && Date.now() >= lockoutUntil) {
-			// Lockout expired, reset
-			resetLockout();
-		}
+		if (lockoutUntil && Date.now() >= lockoutUntil) resetLockout();
 		return false;
 	}
 
@@ -97,14 +84,10 @@
 	function startLockout() {
 		lockoutUntil = Date.now() + LOCKOUT_DURATION;
 		saveLockoutState();
-
-		// Update countdown every second
 		if (lockoutInterval) clearInterval(lockoutInterval);
 		lockoutInterval = setInterval(() => {
 			updateRemainingTime();
-			if (remainingLockoutTime <= 0) {
-				resetLockout();
-			}
+			if (remainingLockoutTime <= 0) resetLockout();
 		}, 1000);
 	}
 
@@ -112,21 +95,12 @@
 		failedAttempts = 0;
 		lockoutUntil = null;
 		remainingLockoutTime = 0;
-		if (lockoutInterval) {
-			clearInterval(lockoutInterval);
-			lockoutInterval = null;
-		}
+		if (lockoutInterval) { clearInterval(lockoutInterval); lockoutInterval = null; }
 		saveLockoutState();
 	}
 
 	function saveLockoutState() {
-		localStorage.setItem(
-			'auth_lockout',
-			JSON.stringify({
-				failedAttempts,
-				lockoutUntil
-			})
-		);
+		localStorage.setItem('auth_lockout', JSON.stringify({ failedAttempts, lockoutUntil }));
 	}
 
 	function loadLockoutState() {
@@ -136,12 +110,8 @@
 				const data = JSON.parse(saved);
 				failedAttempts = data.failedAttempts || 0;
 				lockoutUntil = data.lockoutUntil || null;
-				if (checkLockout()) {
-					startLockout();
-				}
-			} catch {
-				// Invalid data, ignore
-			}
+				if (checkLockout()) startLockout();
+			} catch { /* ignore */ }
 		}
 	}
 
@@ -152,67 +122,62 @@
 	}
 
 	async function handleSubmit() {
-		if (!email || !password) {
-			error = 'Please fill in all fields';
+		error = '';
+		message = '';
+
+		if (mode === 'forgot') {
+			if (!email) { error = 'Please enter your email'; return; }
+			loading = true;
+			try {
+				const redirectTo = browser ? window.location.origin : undefined;
+				const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+					redirectTo
+				});
+				if (resetError) throw resetError;
+				message = 'Check your email for the password reset link.';
+				email = '';
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Failed to send reset email';
+			} finally {
+				loading = false;
+			}
 			return;
 		}
 
-		// Check lockout
+		if (!email || !password) { error = 'Please fill in all fields'; return; }
+
 		if (checkLockout()) {
 			error = `Too many failed attempts. Try again in ${formatLockoutTime(remainingLockoutTime)}.`;
 			return;
 		}
 
-		// Validate password strength for signup
 		if (mode === 'signup') {
 			const allRequirementsMet = Object.values(passwordStrength.requirements).every(Boolean);
-			if (!allRequirementsMet) {
-				error = 'Password does not meet security requirements';
-				return;
-			}
+			if (!allRequirementsMet) { error = 'Password does not meet security requirements'; return; }
+			if (password !== confirmPassword) { error = 'Passwords do not match'; return; }
 		}
 
 		loading = true;
-		error = '';
-		message = '';
 
 		try {
 			if (mode === 'signup') {
-				const { error: signUpError } = await supabase.auth.signUp({
-					email,
-					password
-				});
-
+				const { error: signUpError } = await supabase.auth.signUp({ email, password });
 				if (signUpError) throw signUpError;
-
 				message = 'Check your email for the confirmation link!';
-				email = '';
-				password = '';
-				resetLockout(); // Reset on successful signup
+				email = ''; password = ''; confirmPassword = '';
+				resetLockout();
 			} else {
-				const { error: signInError } = await supabase.auth.signInWithPassword({
-					email,
-					password
-				});
-
+				const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 				if (signInError) {
-					// Failed sign in
 					failedAttempts++;
 					saveLockoutState();
-
 					if (failedAttempts >= MAX_ATTEMPTS) {
 						startLockout();
-						throw new Error(
-							`Too many failed attempts. Account locked for ${LOCKOUT_DURATION / 60000} minutes.`
-						);
+						throw new Error(`Too many failed attempts. Account locked for ${LOCKOUT_DURATION / 60000} minutes.`);
 					} else {
-						throw new Error(
-							`${signInError.message} (${MAX_ATTEMPTS - failedAttempts} attempts remaining)`
-						);
+						throw new Error(`${signInError.message} (${MAX_ATTEMPTS - failedAttempts} attempts remaining)`);
 					}
 				}
-
-				// Successful sign in
 				resetLockout();
 			}
 		} catch (e) {
@@ -224,14 +189,20 @@
 
 	function toggleMode() {
 		mode = mode === 'signin' ? 'signup' : 'signin';
-		error = '';
-		message = '';
-		password = '';
+		error = ''; message = ''; password = ''; confirmPassword = '';
 	}
 
-	onMount(() => {
-		loadLockoutState();
-	});
+	function goToForgot() {
+		mode = 'forgot';
+		error = ''; message = ''; password = ''; confirmPassword = '';
+	}
+
+	function goToSignIn() {
+		mode = 'signin';
+		error = ''; message = ''; password = ''; confirmPassword = '';
+	}
+
+	onMount(() => { loadLockoutState(); });
 </script>
 
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
@@ -242,109 +213,130 @@
 		</div>
 
 		<form on:submit|preventDefault={handleSubmit} class="space-y-4">
-			<div>
-				<label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
-				<input
-					id="email"
-					type="email"
-					bind:value={email}
-					disabled={loading}
-					placeholder="you@example.com"
-					class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
-				/>
-			</div>
 
-			<div>
-				<label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
-				<input
-					id="password"
-					type="password"
-					bind:value={password}
-					disabled={loading}
-					placeholder="••••••••"
-					class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
-				/>
+			{#if mode === 'forgot'}
+				<!-- Forgot Password -->
+				<p class="text-sm text-gray-600 dark:text-gray-400 text-center">
+					Enter your email and we'll send you a reset link.
+				</p>
+				<div>
+					<label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
+					<input
+						id="email"
+						type="email"
+						bind:value={email}
+						disabled={loading}
+						placeholder="you@example.com"
+						class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
+					/>
+				</div>
 
-				{#if mode === 'signup' && password}
-					<!-- Password Strength Indicator -->
-					<div class="mt-2">
-						<div class="flex items-center justify-between mb-1">
-							<span class="text-xs text-gray-600 dark:text-gray-400">Password strength:</span>
-							<span class="text-xs font-medium {passwordStrength.color}">
-								{passwordStrength.label}
-							</span>
-						</div>
-						<div class="w-full h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden">
-							<div
-								class="h-full transition-all duration-300 {passwordStrength.score === 1
-									? 'bg-red-500 w-1/4'
-									: passwordStrength.score === 2
-										? 'bg-yellow-500 w-2/4'
-										: passwordStrength.score === 3
-											? 'bg-blue-500 w-3/4'
-											: passwordStrength.score === 4
-												? 'bg-green-500 w-full'
-												: 'w-0'}"
-							></div>
-						</div>
-					</div>
+			{:else}
+				<!-- Sign In / Sign Up -->
+				<div>
+					<label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
+					<input
+						id="email"
+						type="email"
+						bind:value={email}
+						disabled={loading}
+						placeholder="you@example.com"
+						class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
+					/>
+				</div>
 
-					<!-- Password Requirements -->
-					<div class="mt-3 space-y-1">
-						<p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Requirements:</p>
-						<div class="grid grid-cols-2 gap-1 text-xs">
-							<div class="flex items-center gap-1.5">
-								<span
-									class="{passwordStrength.requirements.length
-										? 'text-green-600 dark:text-green-400'
-										: 'text-gray-400 dark:text-gray-500'}"
-								>
-									{passwordStrength.requirements.length ? '✓' : '○'}
-								</span>
-								<span class="text-gray-600 dark:text-gray-400">8+ characters</span>
+				<div>
+					<label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
+					<input
+						id="password"
+						type="password"
+						bind:value={password}
+						disabled={loading}
+						placeholder="••••••••"
+						class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
+					/>
+
+					{#if mode === 'signup' && password}
+						<!-- Password Strength Indicator -->
+						<div class="mt-2">
+							<div class="flex items-center justify-between mb-1">
+								<span class="text-xs text-gray-600 dark:text-gray-400">Password strength:</span>
+								<span class="text-xs font-medium {passwordStrength.color}">{passwordStrength.label}</span>
 							</div>
-							<div class="flex items-center gap-1.5">
-								<span
-									class="{passwordStrength.requirements.uppercase
-										? 'text-green-600 dark:text-green-400'
-										: 'text-gray-400 dark:text-gray-500'}"
-								>
-									{passwordStrength.requirements.uppercase ? '✓' : '○'}
-								</span>
-								<span class="text-gray-600 dark:text-gray-400">Uppercase (A-Z)</span>
-							</div>
-							<div class="flex items-center gap-1.5">
-								<span
-									class="{passwordStrength.requirements.lowercase
-										? 'text-green-600 dark:text-green-400'
-										: 'text-gray-400 dark:text-gray-500'}"
-								>
-									{passwordStrength.requirements.lowercase ? '✓' : '○'}
-								</span>
-								<span class="text-gray-600 dark:text-gray-400">Lowercase (a-z)</span>
-							</div>
-							<div class="flex items-center gap-1.5">
-								<span
-									class="{passwordStrength.requirements.number ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}"
-								>
-									{passwordStrength.requirements.number ? '✓' : '○'}
-								</span>
-								<span class="text-gray-600 dark:text-gray-400">Number (0-9)</span>
-							</div>
-							<div class="flex items-center gap-1.5 col-span-2">
-								<span
-									class="{passwordStrength.requirements.special
-										? 'text-green-600 dark:text-green-400'
-										: 'text-gray-400 dark:text-gray-500'}"
-								>
-									{passwordStrength.requirements.special ? '✓' : '○'}
-								</span>
-								<span class="text-gray-600 dark:text-gray-400">Special character (!@#$...)</span>
+							<div class="w-full h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full overflow-hidden">
+								<div
+									class="h-full transition-all duration-300 {passwordStrength.score === 1
+										? 'bg-red-500 w-1/4'
+										: passwordStrength.score === 2
+											? 'bg-yellow-500 w-2/4'
+											: passwordStrength.score === 3
+												? 'bg-blue-500 w-3/4'
+												: passwordStrength.score === 4
+													? 'bg-green-500 w-full'
+													: 'w-0'}"
+								></div>
 							</div>
 						</div>
+
+						<!-- Password Requirements -->
+						<div class="mt-3 space-y-1">
+							<p class="text-xs text-gray-600 dark:text-gray-400 mb-1">Requirements:</p>
+							<div class="grid grid-cols-2 gap-1 text-xs">
+								<div class="flex items-center gap-1.5">
+									<span class="{passwordStrength.requirements.length ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}">
+										{passwordStrength.requirements.length ? '✓' : '○'}
+									</span>
+									<span class="text-gray-600 dark:text-gray-400">8+ characters</span>
+								</div>
+								<div class="flex items-center gap-1.5">
+									<span class="{passwordStrength.requirements.uppercase ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}">
+										{passwordStrength.requirements.uppercase ? '✓' : '○'}
+									</span>
+									<span class="text-gray-600 dark:text-gray-400">Uppercase (A-Z)</span>
+								</div>
+								<div class="flex items-center gap-1.5">
+									<span class="{passwordStrength.requirements.lowercase ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}">
+										{passwordStrength.requirements.lowercase ? '✓' : '○'}
+									</span>
+									<span class="text-gray-600 dark:text-gray-400">Lowercase (a-z)</span>
+								</div>
+								<div class="flex items-center gap-1.5">
+									<span class="{passwordStrength.requirements.number ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}">
+										{passwordStrength.requirements.number ? '✓' : '○'}
+									</span>
+									<span class="text-gray-600 dark:text-gray-400">Number (0-9)</span>
+								</div>
+								<div class="flex items-center gap-1.5 col-span-2">
+									<span class="{passwordStrength.requirements.special ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}">
+										{passwordStrength.requirements.special ? '✓' : '○'}
+									</span>
+									<span class="text-gray-600 dark:text-gray-400">Special character (!@#$...)</span>
+								</div>
+							</div>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Confirm Password (signup only) -->
+				{#if mode === 'signup'}
+					<div>
+						<label for="confirmPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Confirm Password</label>
+						<input
+							id="confirmPassword"
+							type="password"
+							bind:value={confirmPassword}
+							disabled={loading}
+							placeholder="••••••••"
+							class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50
+								{confirmPassword && password !== confirmPassword ? 'border-red-400 dark:border-red-500' : ''}
+								{confirmPassword && password === confirmPassword ? 'border-green-400 dark:border-green-500' : ''}"
+						/>
+						{#if confirmPassword && password !== confirmPassword}
+							<p class="text-xs text-red-500 mt-1">Passwords do not match</p>
+						{/if}
 					</div>
 				{/if}
-			</div>
+			{/if}
 
 			{#if error}
 				<div class="text-red-700 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-lg p-3">
@@ -368,26 +360,39 @@
 				disabled={loading || (lockoutUntil !== null && remainingLockoutTime > 0)}
 				class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 			>
-				{loading
-					? 'Loading...'
-					: lockoutUntil && remainingLockoutTime > 0
-						? `Locked (${formatLockoutTime(remainingLockoutTime)})`
-						: mode === 'signin'
-							? 'Sign In'
-							: 'Sign Up'}
+				{#if loading}
+					Loading...
+				{:else if lockoutUntil && remainingLockoutTime > 0}
+					Locked ({formatLockoutTime(remainingLockoutTime)})
+				{:else if mode === 'signin'}
+					Sign In
+				{:else if mode === 'signup'}
+					Sign Up
+				{:else}
+					Send Reset Email
+				{/if}
 			</button>
 		</form>
 
-		<div class="mt-6 text-center">
-			<button
-				on:click={toggleMode}
-				disabled={loading}
-				class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm disabled:opacity-50"
-			>
-				{mode === 'signin'
-					? "Don't have an account? Sign up"
-					: 'Already have an account? Sign in'}
-			</button>
+		<div class="mt-6 space-y-2 text-center">
+			{#if mode === 'signin'}
+				<div>
+					<button on:click={goToForgot} disabled={loading} class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-sm disabled:opacity-50">
+						Forgot password?
+					</button>
+				</div>
+				<div>
+					<button on:click={toggleMode} disabled={loading} class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm disabled:opacity-50">
+						Don't have an account? Sign up
+					</button>
+				</div>
+			{:else}
+				<div>
+					<button on:click={goToSignIn} disabled={loading} class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm disabled:opacity-50">
+						Back to sign in
+					</button>
+				</div>
+			{/if}
 		</div>
 	</div>
 </div>

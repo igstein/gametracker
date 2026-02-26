@@ -4,6 +4,7 @@
 	import AddGameModal from '$lib/components/AddGameModal.svelte';
 	import Auth from '$lib/components/Auth.svelte';
 	import KeyboardShortcutsHelp from '$lib/components/KeyboardShortcutsHelp.svelte';
+	import PasswordResetModal from '$lib/components/PasswordResetModal.svelte';
 	import { writable } from 'svelte/store';
 	import { setContext, onMount } from 'svelte';
 	import { authStore, initAuth } from '$lib/stores/auth';
@@ -132,7 +133,9 @@
 	});
 </script>
 
-{#if $authStore.loading}
+{#if $authStore.requiresPasswordReset}
+	<PasswordResetModal />
+{:else if $authStore.loading}
 	<div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
 		<p class="text-gray-600 dark:text-gray-400 text-lg">Loading...</p>
 	</div>
