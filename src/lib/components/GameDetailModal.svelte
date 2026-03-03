@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { supabase } from '$lib/supabase/client';
-	import { authStore } from '$lib/stores/auth';
+	import { page } from '$app/stores';
 	import { isOnline } from '$lib/stores/network';
 	import type { Game, GameStatus, GamePriority, GameNote } from '$lib/types';
 	import { getTargetHours } from '$lib/utils';
@@ -19,6 +18,8 @@
 	export let onClose: () => void;
 	export let onGameUpdated: () => void;
 	export let onGameDeleted: () => void = () => {};
+
+	$: supabase = $page.data.supabase;
 
 	let hoursToAdd = 0;
 	let minutesToAdd = 0;
@@ -254,7 +255,7 @@
 		error = '';
 
 		try {
-			if (!$authStore.user) {
+			if (!$page.data.user) {
 				error = 'You must be logged in to save notes';
 				saving = false;
 				return;
@@ -262,7 +263,7 @@
 
 			const noteData = {
 				game_id: game.id,
-				user_id: $authStore.user.id,
+				user_id: $page.data.user.id,
 				title: noteTitle.trim() || null,
 				content: noteContent.trim()
 			};

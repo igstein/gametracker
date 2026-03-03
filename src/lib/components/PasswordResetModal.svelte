@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { supabase } from '$lib/supabase/client';
-	import { authStore } from '$lib/stores/auth';
+	import { page } from '$app/stores';
+	import { requiresPasswordReset } from '$lib/stores/auth';
 
 	let password = '';
 	let confirmPassword = '';
@@ -49,10 +49,10 @@
 
 		loading = true;
 		try {
-			const { error: updateError } = await supabase.auth.updateUser({ password });
+			const { error: updateError } = await $page.data.supabase.auth.updateUser({ password });
 			if (updateError) throw updateError;
 			success = true;
-			setTimeout(() => authStore.clearPasswordRecovery(), 1500);
+			setTimeout(() => requiresPasswordReset.set(false), 1500);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to update password';
 		} finally {

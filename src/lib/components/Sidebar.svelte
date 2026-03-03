@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { authStore } from '$lib/stores/auth';
+	import { page } from '$app/stores';
 	import { theme, toggleTheme } from '$lib/stores/theme';
-	import { supabase } from '$lib/supabase/client';
 
 	export let onAddGame: () => void;
 	export let onFilterChange: (filter: string) => void;
@@ -30,16 +29,16 @@
 	}
 
 	async function handleSignOut() {
-		await authStore.signOut();
+		await $page.data.supabase.auth.signOut();
 	}
 
 	async function handleExport() {
-		if (!$authStore.user) return;
+		if (!$page.data.user) return;
 		exporting = true;
 		try {
 			const [gamesRes, notesRes] = await Promise.all([
-				supabase.from('games').select('*').eq('user_id', $authStore.user.id),
-				supabase.from('game_notes').select('*').eq('user_id', $authStore.user.id)
+				$page.data.supabase.from('games').select('*').eq('user_id', $page.data.user.id),
+				$page.data.supabase.from('game_notes').select('*').eq('user_id', $page.data.user.id)
 			]);
 
 			if (gamesRes.error) throw gamesRes.error;
@@ -74,7 +73,7 @@
 
 	async function handleImportFile(e: Event) {
 		const file = (e.target as HTMLInputElement).files?.[0];
-		if (!file || !$authStore.user) return;
+		if (!file || !$page.data.user) return;
 
 		importing = true;
 		importError = '';
@@ -88,19 +87,19 @@
 				throw new Error('Invalid backup file: missing games array');
 			}
 
-			const userId = $authStore.user.id;
+			const userId = $page.data.user.id;
 
 			// Upsert games with current user_id
 			if (data.games.length > 0) {
 				const games = data.games.map((g: Record<string, unknown>) => ({ ...g, user_id: userId }));
-				const { error } = await supabase.from('games').upsert(games, { onConflict: 'id' });
+				const { error } = await $page.data.supabase.from('games').upsert(games, { onConflict: 'id' });
 				if (error) throw error;
 			}
 
 			// Upsert notes with current user_id
 			if (data.notes?.length > 0) {
 				const notes = data.notes.map((n: Record<string, unknown>) => ({ ...n, user_id: userId }));
-				const { error } = await supabase.from('game_notes').upsert(notes, { onConflict: 'id' });
+				const { error } = await $page.data.supabase.from('game_notes').upsert(notes, { onConflict: 'id' });
 				if (error) throw error;
 			}
 
@@ -220,8 +219,8 @@
 		>
 			Sign Out
 		</button>
-		{#if $authStore.user?.email}
-			<p class="text-gray-500 dark:text-gray-500 text-xs text-center truncate px-2">{$authStore.user.email}</p>
+		{#if $page.data.user?.email}
+			<p class="text-gray-500 dark:text-gray-500 text-xs text-center truncate px-2">{$page.data.user.email}</p>
 		{/if}
 	</div>
 </aside>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy, getContext } from 'svelte';
-	import { supabase } from '$lib/supabase/client';
+	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
 	import GameCard from '$lib/components/GameCard.svelte';
 	import GameDetailModal from '$lib/components/GameDetailModal.svelte';
 	import type { Game } from '$lib/types';
@@ -26,8 +27,11 @@
 	let realtimeChannel: RealtimeChannel | null = null;
 	let realtimeConnected = false;
 
+	$: supabase = $page.data.supabase;
+
 	const activeFilter = getContext<Writable<string>>('activeFilter');
 	const sortBy = getContext<Writable<string>>('sortBy');
+	const registerCallback = getContext<(callback: () => void) => void>('registerGameAddedCallback');
 
 	// Helper to calculate progress percentage
 	function getProgress(game: Game): number {
@@ -184,8 +188,8 @@
 		}
 	}
 
-	// Watch for online/offline changes
-	$: if ($isOnline) {
+	// Watch for online/offline changes (browser only)
+	$: if (browser && $isOnline) {
 		processSyncQueue();
 	}
 
@@ -264,9 +268,6 @@
 		}
 
 		// Register callback for when games are added
-		const registerCallback = getContext<(callback: () => void) => void>(
-			'registerGameAddedCallback'
-		);
 		if (registerCallback) {
 			registerCallback(loadGames);
 		}
