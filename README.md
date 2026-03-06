@@ -9,11 +9,14 @@ Built as a Progressive Web App (PWA) — installable on macOS, Linux, and iOS fr
 ## Features
 
 - **Search and add games** via HowLongToBeat — cover images and completion times are pulled in automatically
-- **Track playtime** and see your progress against the HLTB community average
+- **Manual game entry** — add games without HLTB, with a custom target time and cover image (upload or URL)
+- **Track playtime** — add or remove hours/minutes, see your progress against the HLTB community average
 - **Priority levels** — mark games as Must Play, High, Medium, or Low priority
+- **Status markers** — finished games get a green border and badge with dimmed cover; abandoned games get a gray badge with a darker dimmed cover
 - **Next Up section** — always shows the 3 games closest to completion to keep you motivated
 - **Game journal** — private dated notes per game for strategies, session logs, or anything else
 - **Filter and sort** — by status (Playing, Backlog, Finished, Abandoned), name, progress, priority, or last played
+- **Configurable default view** — pin any filter as your default landing view
 - **Dark and light mode** — toggleable, persists across sessions
 - **Offline support** — works without internet, syncs when you reconnect
 - **Cross-device sync** — changes appear in real time across all your devices
@@ -28,10 +31,10 @@ Built as a Progressive Web App (PWA) — installable on macOS, Linux, and iOS fr
 1. Click **+ Add Game** in the sidebar (or press `N`)
 2. Search for the game by name — results come from HowLongToBeat
 3. Click **Add** on the result you want
-4. If a game isn't on HLTB, use **"Add manually"** to enter a custom target time
+4. If a game isn't on HLTB, use **"Add manually"** to enter a custom target time and cover image
 
 ### Tracking progress
-- Open any game card to update your playtime, change status, or adjust priority
+- Open any game card to add or remove playtime, change status, or adjust priority
 - The progress bar turns red (0–30%), yellow (31–70%), and green (71–100%) as you play
 
 ### Journal
