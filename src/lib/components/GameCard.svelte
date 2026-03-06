@@ -32,16 +32,24 @@
 </script>
 
 <div
-	class="bg-white dark:bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors cursor-pointer border border-gray-200 dark:border-gray-700"
+	class="bg-white dark:bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors cursor-pointer border relative {game.status === 'finished' ? 'border-green-500' : 'border-gray-200 dark:border-gray-700'}"
 	on:click={onClick}
 	role="button"
 	tabindex="0"
 	on:keydown={(e) => e.key === 'Enter' && onClick()}
 >
+	{#if game.status === 'finished'}
+		<span class="absolute top-1.5 right-1.5 z-10 bg-green-600 text-white text-[9px] font-bold uppercase px-1.5 py-0.5 rounded tracking-wide">✓ Finished</span>
+	{/if}
 	<!-- Cover Image -->
-	<div class="aspect-[4/4] bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+	<div class="aspect-[4/4] bg-gray-200 dark:bg-gray-700 flex items-center justify-center relative">
 		{#if game.cover_image_url}
-			<img src={game.cover_image_url} alt={game.title} class="w-full h-full object-cover" />
+			<img
+				src={game.cover_image_url}
+				alt={game.title}
+				class="w-full h-full object-cover"
+				style={game.status === 'finished' ? 'filter: brightness(0.5) saturate(0.7);' : ''}
+			/>
 		{:else}
 			<span class="text-4xl">🎮</span>
 		{/if}
