@@ -23,6 +23,7 @@
 
 	let hoursToAdd = 0;
 	let minutesToAdd = 0;
+	let subtractMode = false;
 	let status: GameStatus = 'backlog';
 	let priority: GamePriority = 'medium';
 	let saving = false;
@@ -46,6 +47,7 @@
 		priority = game.priority;
 		hoursToAdd = 0;
 		minutesToAdd = 0;
+		subtractMode = false;
 		// Reset note form state
 		showAddNote = false;
 		noteTitle = '';
@@ -88,8 +90,8 @@
 		error = '';
 
 		try {
-			const hoursAdded = hoursToAdd + minutesToAdd / 60;
-			const newPlayedHours = game.played_hours + hoursAdded;
+			const delta = hoursToAdd + minutesToAdd / 60;
+			const newPlayedHours = Math.max(0, game.played_hours + (subtractMode ? -delta : delta));
 
 			const { error: updateError } = await supabase
 				.from('games')
@@ -502,7 +504,23 @@
 			<form on:submit|preventDefault={handleUpdate} class="space-y-4">
 				<!-- Add Playtime -->
 				<div>
-					<label class="block text-sm font-medium text-gray-300 mb-2">Add Playtime</label>
+					<label class="block text-sm font-medium text-gray-300 mb-2">Adjust Playtime</label>
+					<div class="flex gap-2 mb-2">
+						<button
+							type="button"
+							on:click={() => { subtractMode = false; }}
+							class="px-3 py-1 text-sm rounded-lg transition-colors {!subtractMode ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+						>
+							+ Add
+						</button>
+						<button
+							type="button"
+							on:click={() => { subtractMode = true; }}
+							class="px-3 py-1 text-sm rounded-lg transition-colors {subtractMode ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+						>
+							− Remove
+						</button>
+					</div>
 					<div class="flex gap-3">
 						<div class="flex-1">
 							<input
@@ -526,9 +544,11 @@
 					</div>
 					<p class="text-xs text-gray-500 mt-1">
 						{#if hoursToAdd > 0 || minutesToAdd > 0}
-							New total: {(game.played_hours + hoursToAdd + minutesToAdd / 60).toFixed(1)} hours
+							{@const delta = hoursToAdd + minutesToAdd / 60}
+							{@const newTotal = Math.max(0, game.played_hours + (subtractMode ? -delta : delta))}
+							New total: {newTotal.toFixed(1)} hours ({subtractMode ? '−' : '+'}{delta.toFixed(1)}h)
 						{:else}
-							Enter hours and/or minutes to add
+							Enter hours and/or minutes to {subtractMode ? 'remove' : 'add'}
 						{/if}
 					</p>
 				</div>
