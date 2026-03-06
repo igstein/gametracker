@@ -18,8 +18,51 @@
 	let playedHours = 0;
 	let status: GameStatus = 'backlog';
 	let priority: GamePriority = 'medium';
+	let coverImageUrl = '';
+	let coverFile: File | null = null;
+	let coverPreview = '';
+	let coverMode: 'url' | 'file' = 'file';
 	let saving = false;
 	let error = '';
+
+	function handleFileSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		if (!file.type.startsWith('image/')) {
+			error = 'Please select an image file';
+			return;
+		}
+
+		coverFile = file;
+		coverPreview = URL.createObjectURL(file);
+	}
+
+	function clearFile() {
+		coverFile = null;
+		if (coverPreview) {
+			URL.revokeObjectURL(coverPreview);
+			coverPreview = '';
+		}
+	}
+
+	async function uploadCoverImage(file: File, userId: string): Promise<string> {
+		const ext = file.name.split('.').pop() || 'jpg';
+		const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+
+		const { error: uploadError } = await $page.data.supabase.storage
+			.from('covers')
+			.upload(path, file);
+
+		if (uploadError) throw uploadError;
+
+		const { data } = $page.data.supabase.storage
+			.from('covers')
+			.getPublicUrl(path);
+
+		return data.publicUrl;
+	}
 
 	async function performSearch(query: string) {
 		if (!query || query.trim().length < 2) {
@@ -121,12 +164,20 @@
 				return;
 			}
 
+			let finalCoverUrl: string | null = null;
+			if (coverMode === 'file' && coverFile) {
+				finalCoverUrl = await uploadCoverImage(coverFile, $page.data.user.id);
+			} else if (coverMode === 'url' && coverImageUrl.trim()) {
+				finalCoverUrl = coverImageUrl.trim();
+			}
+
 			const mainStory = targetHours * 0.85;
 			const mainPlusExtras = targetHours * 1.15;
 
 			const { error: insertError } = await $page.data.supabase.from('games').insert({
 				user_id: $page.data.user.id,
 				title: title.trim(),
+				cover_image_url: finalCoverUrl,
 				played_hours: playedHours,
 				main_story_hours: mainStory,
 				main_plus_extras_hours: mainPlusExtras,
@@ -152,6 +203,9 @@
 		searchError = '';
 		showManualForm = false;
 		title = '';
+		coverImageUrl = '';
+		clearFile();
+		coverMode = 'file';
 		targetHours = 50;
 		playedHours = 0;
 		status = 'backlog';
@@ -286,6 +340,82 @@
 							class="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
 							required
 						/>
+					</div>
+
+					<div>
+						<label class="block text-sm font-medium text-gray-300 mb-2">
+							Cover Image
+						</label>
+						<div class="flex gap-2 mb-2">
+							<button
+								type="button"
+								on:click={() => { coverMode = 'file'; coverImageUrl = ''; }}
+								class="px-3 py-1 text-sm rounded-lg transition-colors {coverMode === 'file' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+							>
+								Upload File
+							</button>
+							<button
+								type="button"
+								on:click={() => { coverMode = 'url'; clearFile(); }}
+								class="px-3 py-1 text-sm rounded-lg transition-colors {coverMode === 'url' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+							>
+								Image URL
+							</button>
+						</div>
+
+						{#if coverMode === 'file'}
+							<div class="flex items-center gap-3">
+								<label
+									for="coverFile"
+									class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors cursor-pointer text-sm"
+								>
+									{coverFile ? 'Change File' : 'Choose File'}
+								</label>
+								<input
+									id="coverFile"
+									type="file"
+									accept="image/*"
+									on:change={handleFileSelect}
+									class="hidden"
+								/>
+								{#if coverFile}
+									<span class="text-sm text-gray-400 truncate flex-1">{coverFile.name}</span>
+									<button
+										type="button"
+										on:click={clearFile}
+										class="text-gray-400 hover:text-red-400 text-sm"
+									>
+										Remove
+									</button>
+								{:else}
+									<span class="text-sm text-gray-500">No file selected</span>
+								{/if}
+							</div>
+							{#if coverPreview}
+								<img
+									src={coverPreview}
+									alt="Cover preview"
+									class="mt-2 w-20 h-28 object-cover rounded"
+								/>
+							{/if}
+						{:else}
+							<input
+								id="coverImageUrl"
+								type="url"
+								bind:value={coverImageUrl}
+								placeholder="https://example.com/cover.jpg"
+								class="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+							/>
+							{#if coverImageUrl}
+								<img
+									src={coverImageUrl}
+									alt="Cover preview"
+									class="mt-2 w-20 h-28 object-cover rounded"
+									on:error={(e) => { e.currentTarget.style.display = 'none'; }}
+									on:load={(e) => { e.currentTarget.style.display = 'block'; }}
+								/>
+							{/if}
+						{/if}
 					</div>
 
 					<div>

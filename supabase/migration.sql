@@ -50,6 +50,26 @@ ALTER TABLE game_notes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own notes" ON game_notes
     FOR ALL USING (auth.uid() = user_id);
 
+-- Storage bucket for cover images
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('covers', 'covers', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Allow authenticated users to upload covers to their own folder
+CREATE POLICY "Users upload own covers" ON storage.objects
+    FOR INSERT TO authenticated
+    WITH CHECK (bucket_id = 'covers' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+-- Allow anyone to view covers (public bucket)
+CREATE POLICY "Public cover access" ON storage.objects
+    FOR SELECT
+    USING (bucket_id = 'covers');
+
+-- Allow users to delete their own covers
+CREATE POLICY "Users delete own covers" ON storage.objects
+    FOR DELETE TO authenticated
+    USING (bucket_id = 'covers' AND (storage.foldername(name))[1] = auth.uid()::text);
+
 -- Enable Realtime for cross-device sync
 ALTER PUBLICATION supabase_realtime ADD TABLE games;
 ALTER PUBLICATION supabase_realtime ADD TABLE game_notes;
