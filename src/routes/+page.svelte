@@ -368,7 +368,7 @@
 			<p class="text-lg">Loading games...</p>
 		</div>
 	{:else if filteredAndSortedGames.length > 0}
-		<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+		<div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 max-w-[1800px]">
 			{#each filteredAndSortedGames as game (game.id)}
 				<GameCard {game} onClick={() => openGameDetail(game)} />
 			{/each}

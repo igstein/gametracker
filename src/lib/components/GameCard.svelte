@@ -39,27 +39,27 @@
 	on:keydown={(e) => e.key === 'Enter' && onClick()}
 >
 	<!-- Cover Image -->
-	<div class="aspect-[3/4] bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+	<div class="aspect-[4/4] bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
 		{#if game.cover_image_url}
 			<img src={game.cover_image_url} alt={game.title} class="w-full h-full object-cover" />
 		{:else}
-			<span class="text-6xl">🎮</span>
+			<span class="text-4xl">🎮</span>
 		{/if}
 	</div>
 
 	<!-- Game Info -->
-	<div class="p-4">
-		<div class="flex items-start justify-between gap-2 mb-3">
-			<h3 class="font-semibold text-gray-900 dark:text-white text-sm line-clamp-2 flex-1">{game.title}</h3>
-			<span class="text-xl {priority.color} flex-shrink-0">{priority.icon}</span>
+	<div class="p-3">
+		<div class="flex items-start justify-between gap-1.5 mb-2">
+			<h3 class="font-semibold text-gray-900 dark:text-white text-xs line-clamp-2 flex-1">{game.title}</h3>
+			<span class="text-base {priority.color} flex-shrink-0">{priority.icon}</span>
 		</div>
 
 		<!-- Progress Bar -->
-		<div class="space-y-2">
-			<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-				<div class="{progressColor} h-full transition-all" style="width: {progress}%"></div>
+		<div class="space-y-1.5">
+			<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+				<div class="{progressColor} h-full transition-all" style="width: {Math.min(100, progress)}%"></div>
 			</div>
-			<div class="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+			<div class="flex justify-between text-[10px] text-gray-600 dark:text-gray-400">
 				<span>{Math.round(game.played_hours * 10) / 10}h / {targetHours.toFixed(0)}h</span>
 				<span>{progress.toFixed(0)}%</span>
 			</div>
