@@ -5,6 +5,8 @@
 	export let onAddGame: () => void;
 	export let onFilterChange: (filter: string) => void;
 	export let activeFilter: string = 'all';
+	export let defaultFilter: string = 'all';
+	export let onSetDefault: (filter: string) => void = () => {};
 	export let mobileOpen: boolean = false;
 	export let onMobileClose: () => void = () => {};
 	export let onDataImported: () => void = () => {};
@@ -148,16 +150,30 @@
 		<ul class="space-y-2">
 			{#each filters as filter}
 				<li>
-					<button
-						on:click={() => setFilter(filter.id)}
-						class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-colors {activeFilter ===
-						filter.id
-							? 'bg-blue-600 text-white'
-							: 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
-					>
-						<span class="text-lg">{filter.icon}</span>
-						<span class="font-medium">{filter.label}</span>
-					</button>
+					<div class="flex items-center gap-1">
+						<button
+							on:click={() => setFilter(filter.id)}
+							class="flex-1 flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-colors {activeFilter ===
+							filter.id
+								? 'bg-blue-600 text-white'
+								: 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+						>
+							<span class="text-lg">{filter.icon}</span>
+							<span class="font-medium">{filter.label}</span>
+							{#if filter.id === defaultFilter}
+								<span class="ml-auto text-xs opacity-60" title="Default view">📌</span>
+							{/if}
+						</button>
+						{#if activeFilter === filter.id && filter.id !== defaultFilter}
+							<button
+								on:click={() => onSetDefault(filter.id)}
+								class="px-1.5 py-1.5 text-gray-400 hover:text-blue-400 transition-colors rounded"
+								title="Set as default view"
+							>
+								<span class="text-xs">📌</span>
+							</button>
+						{/if}
+					</div>
 				</li>
 			{/each}
 		</ul>

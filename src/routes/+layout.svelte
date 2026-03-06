@@ -15,7 +15,8 @@
 	import { browser } from '$app/environment';
 
 	const showAddGameModal = writable(false);
-	const activeFilter = writable<string>('all');
+	let defaultFilter = browser ? (localStorage.getItem('defaultFilter') || 'all') : 'all';
+	const activeFilter = writable<string>(defaultFilter);
 	const sortBy = writable<string>('created_at_desc');
 	let showShortcutsHelp = false;
 	let mobileSidebarOpen = false;
@@ -45,6 +46,13 @@
 
 	function handleFilterChange(filter: string) {
 		activeFilter.set(filter);
+	}
+
+	function handleSetDefault(filter: string) {
+		if (browser) {
+			localStorage.setItem('defaultFilter', filter);
+			defaultFilter = filter;
+		}
 	}
 
 	async function registerServiceWorker() {
@@ -168,6 +176,8 @@
 			onAddGame={openAddGameModal}
 			onFilterChange={handleFilterChange}
 			activeFilter={$activeFilter}
+			{defaultFilter}
+			onSetDefault={handleSetDefault}
 			mobileOpen={mobileSidebarOpen}
 			onMobileClose={() => (mobileSidebarOpen = false)}
 			onDataImported={handleGameAdded}
