@@ -331,6 +331,7 @@
 								<h3 class="font-semibold text-gray-900 dark:text-white text-[10px] line-clamp-2 flex-1">{game.title}</h3>
 								<span class="text-xs {prio.color} flex-shrink-0">{prio.icon}</span>
 							</div>
+							{#if t > 0}
 							<div class="space-y-1">
 								<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 overflow-hidden">
 									<div class="{progColor} h-full transition-all" style="width: {prog}%"></div>
@@ -340,6 +341,9 @@
 									<span>{prog.toFixed(0)}%</span>
 								</div>
 							</div>
+							{:else}
+							<p class="text-[9px] text-amber-500 dark:text-amber-400">Set target time</p>
+							{/if}
 						</div>
 					</div>
 				{/each}
