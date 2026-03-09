@@ -329,7 +329,7 @@
 
 	<div class="mb-8 flex flex-wrap gap-4 justify-between items-start">
 		<div>
-			<h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Your Games</h2>
+			<h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2 capitalize">{$activeFilter === 'all' ? 'All Games' : $activeFilter}</h2>
 			<p class="text-gray-600 dark:text-gray-400">Track your progress and finish what you started</p>
 		</div>
 		<div class="flex items-center gap-2">
