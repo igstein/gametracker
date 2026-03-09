@@ -5,7 +5,7 @@
 	import GameCard from '$lib/components/GameCard.svelte';
 	import GameDetailModal from '$lib/components/GameDetailModal.svelte';
 	import type { Game } from '$lib/types';
-	import { getTargetHours } from '$lib/utils';
+	import { getTargetHours, scoreGame } from '$lib/utils';
 	import type { Writable } from 'svelte/store';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import { isOnline } from '$lib/stores/network';
@@ -87,18 +87,21 @@
 		return sorted;
 	})();
 
-	// Next Up: Top 3 games with shortest remaining time from Playing/Backlog
+	// Next Up: Top 3 games scored by priority, recency, completion, genre diversity and age
 	$: nextUpGames = (() => {
-		const playingOrBacklog = games.filter(
+		const candidates = games.filter(
 			(game) => game.status === 'playing' || game.status === 'backlog'
 		);
 
-		return playingOrBacklog
-			.map((game) => ({
-				game,
-				remainingHours: getRemainingHours(game)
-			}))
-			.sort((a, b) => a.remainingHours - b.remainingHours)
+		// Find genre of most recently played game
+		const recentGame = games
+			.filter((g) => g.last_played && g.genre)
+			.sort((a, b) => new Date(b.last_played!).getTime() - new Date(a.last_played!).getTime())[0];
+		const recentGenre = recentGame?.genre ?? null;
+
+		return candidates
+			.map((game) => ({ game, score: scoreGame(game, recentGenre) }))
+			.sort((a, b) => b.score - a.score)
 			.slice(0, 3)
 			.map((item) => item.game);
 	})();
