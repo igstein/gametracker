@@ -307,14 +307,14 @@
 						on:keydown={(e) => e.key === 'Enter' && openGameDetail(game)}
 						role="button"
 						tabindex="0"
-						class="flex-shrink-0 w-24 bg-white dark:bg-gray-800 rounded-lg overflow-hidden cursor-pointer border relative transition-colors hover:bg-gray-50 dark:hover:bg-gray-750 {game.status === 'finished' ? 'border-green-500' : game.status === 'abandoned' ? 'border-gray-400' : 'border-gray-200 dark:border-gray-700'}"
+						class="flex-shrink-0 w-28 lg:w-36 xl:w-40 bg-white dark:bg-gray-800 rounded-lg overflow-hidden cursor-pointer border relative transition-colors hover:bg-gray-50 dark:hover:bg-gray-750 {game.status === 'finished' ? 'border-green-500' : game.status === 'abandoned' ? 'border-gray-400' : 'border-gray-200 dark:border-gray-700'}"
 					>
 						{#if game.status === 'finished'}
 							<span class="absolute top-1 right-1 z-10 bg-green-600 text-white text-[7px] font-bold uppercase px-1 py-0.5 rounded tracking-wide">✓</span>
 						{:else if game.status === 'abandoned'}
 							<span class="absolute top-1 right-1 z-10 bg-gray-400 text-white text-[7px] font-bold uppercase px-1 py-0.5 rounded tracking-wide">✗</span>
 						{/if}
-						<div class="aspect-square bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+						<div class="aspect-[2/3] bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
 							{#if game.cover_image_url}
 								<img
 									src={game.cover_image_url}
@@ -388,7 +388,7 @@
 			<p class="text-lg">Loading games...</p>
 		</div>
 	{:else if filteredAndSortedGames.length > 0}
-		<div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 max-w-[1800px]">
+		<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-[1800px]">
 			{#each filteredAndSortedGames as game (game.id)}
 				<GameCard {game} onClick={() => openGameDetail(game)} />
 			{/each}

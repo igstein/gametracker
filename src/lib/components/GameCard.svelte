@@ -44,7 +44,7 @@
 		<span class="absolute top-1.5 right-1.5 z-10 bg-gray-400 text-white text-[9px] font-bold uppercase px-1.5 py-0.5 rounded tracking-wide">✗ Abandoned</span>
 	{/if}
 	<!-- Cover Image -->
-	<div class="aspect-[4/4] bg-gray-200 dark:bg-gray-700 flex items-center justify-center relative">
+	<div class="aspect-[2/3] bg-gray-200 dark:bg-gray-700 flex items-center justify-center relative">
 		{#if game.cover_image_url}
 			<img
 				src={game.cover_image_url}
