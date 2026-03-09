@@ -1,6 +1,6 @@
 import type { Game } from '$lib/types';
 
-export function scoreGame(game: Game, recentGenre: string | null = null): number {
+export function scoreGame(game: Game, recentGenres: string[] = []): number {
 	const targetHours = getTargetHours(game);
 	const rest = Math.max(0, targetHours - game.played_hours);
 
@@ -17,10 +17,10 @@ export function scoreGame(game: Game, recentGenre: string | null = null): number
 		recencyFactor = Math.exp(-daysSince / 7);
 	}
 
-	// D_Genre: 1.2 if different from recently played genre, 0.8 if same, 1.0 if no data
+	// D_Genre: 0.8 if shares any genre with most recently played game, 1.2 if different, 1.0 if no data
 	let genreFactor = 1.0;
-	if (recentGenre && game.genre) {
-		genreFactor = game.genre === recentGenre ? 0.8 : 1.2;
+	if (recentGenres.length && game.genre?.length) {
+		genreFactor = game.genre.some((g) => recentGenres.includes(g)) ? 0.8 : 1.2;
 	}
 
 	// A_Age: Older backlog games get a gentle boost (saturates at ~1.5)

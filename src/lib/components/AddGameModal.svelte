@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import type { GameStatus, GamePriority, HLTBSearchResult } from '$lib/types';
 
+
 	export let open = false;
 	export let onClose: () => void;
 	export let onGameAdded: () => void;

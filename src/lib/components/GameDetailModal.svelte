@@ -2,7 +2,13 @@
 	import { onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { isOnline } from '$lib/stores/network';
-	import type { Game, GameStatus, GamePriority, GameNote } from '$lib/types';
+	import type { Game, GameStatus, GamePriority, GameGenre, GameNote } from '$lib/types';
+
+	const GENRES: GameGenre[] = [
+		'Action', 'Action RPG', 'Adventure', 'Card Game', 'Fighting', 'Horror',
+		'JRPG', 'MMORPG', 'Platformer', 'Puzzle', 'Racing', 'RPG', 'Shooter',
+		'Simulation', 'Sports', 'Strategy', 'Stealth', 'Survival', 'Tactical RPG', 'Visual Novel'
+	];
 	import { getTargetHours } from '$lib/utils';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
@@ -31,6 +37,8 @@
 	let confirmingDelete = false;
 	let editingTarget = false;
 	let customTargetInput = 0;
+	let editingGenres = false;
+	let selectedGenres: GameGenre[] = [];
 
 	// Journal state
 	let notes: GameNote[] = [];
@@ -56,6 +64,8 @@
 		confirmingDelete = false;
 		editingTarget = false;
 		customTargetInput = 0;
+		editingGenres = false;
+		selectedGenres = [...(game.genre ?? [])];
 		loadNotes();
 		setupNotesRealtimeSubscription();
 	}
@@ -407,6 +417,26 @@
 			});
 	}
 
+	async function saveGenres() {
+		if (!game) return;
+		saving = true;
+		error = '';
+		try {
+			const { error: updateError } = await supabase
+				.from('games')
+				.update({ genre: selectedGenres.length ? selectedGenres : null })
+				.eq('id', game.id);
+			if (updateError) throw updateError;
+			game = { ...game, genre: selectedGenres.length ? selectedGenres : null };
+			editingGenres = false;
+			onGameUpdated();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to save genres';
+		} finally {
+			saving = false;
+		}
+	}
+
 	function formatDate(dateString: string): string {
 		const date = new Date(dateString);
 		return date.toLocaleDateString('en-US', {
@@ -439,6 +469,40 @@
 						<span>Status: {status}</span>
 						<span>•</span>
 						<span>Priority: {priorityConfig[priority].icon} {priorityConfig[priority].label}</span>
+					</div>
+					<div class="mt-3">
+						{#if !editingGenres}
+							<div class="flex flex-wrap gap-1.5 items-center">
+								{#if game.genre?.length}
+									{#each game.genre as g}
+										<span class="px-2 py-0.5 bg-gray-700 text-gray-300 text-xs rounded-full">{g}</span>
+									{/each}
+								{:else}
+									<span class="text-gray-500 text-xs">No genres set</span>
+								{/if}
+								<button
+									type="button"
+									on:click={() => { selectedGenres = [...(game?.genre ?? [])]; editingGenres = true; }}
+									class="text-gray-500 hover:text-gray-300 text-xs ml-1"
+								>Edit</button>
+							</div>
+						{:else}
+							<div class="bg-gray-700 rounded-lg p-3 mt-1">
+								<div class="flex flex-wrap gap-2 mb-3">
+									{#each GENRES as g}
+										<button
+											type="button"
+											on:click={() => selectedGenres = selectedGenres.includes(g) ? selectedGenres.filter(x => x !== g) : [...selectedGenres, g]}
+											class="px-2 py-0.5 text-xs rounded-full transition-colors {selectedGenres.includes(g) ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}"
+										>{g}</button>
+									{/each}
+								</div>
+								<div class="flex gap-2">
+									<button type="button" on:click={() => editingGenres = false} class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded-lg transition-colors">Cancel</button>
+									<button type="button" on:click={saveGenres} disabled={saving} class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50">Save</button>
+								</div>
+							</div>
+						{/if}
 					</div>
 				</div>
 			</div>

@@ -26,6 +26,7 @@
 	let showDetailModal = false;
 	let realtimeChannel: RealtimeChannel | null = null;
 	let realtimeConnected = false;
+	let showDebug = false;
 
 	$: supabase = $page.data.supabase;
 
@@ -95,15 +96,29 @@
 
 		// Find genre of most recently played game
 		const recentGame = games
-			.filter((g) => g.last_played && g.genre)
-			.sort((a, b) => new Date(b.last_played!).getTime() - new Date(a.last_played!).getTime())[0];
-		const recentGenre = recentGame?.genre ?? null;
+			.filter((g) => g.last_played && g.genre?.length)
+			.sort((a, b) => new Date(b.last_played ?? '').getTime() - new Date(a.last_played ?? '').getTime())[0];
+		const recentGenres = recentGame?.genre ?? [];
+
+		const priorityMap: Record<string, number> = { must_play: 1.7, high: 1.3, medium: 1.0, low: 0.7 };
 
 		return candidates
-			.map((game) => ({ game, score: scoreGame(game, recentGenre) }))
+			.map((game) => {
+				const target = getTargetHours(game);
+				const rest = Math.max(0, target - game.played_hours);
+				const P = priorityMap[game.priority];
+				const restFactor = 1 / (rest + 1);
+				const daysSince = game.last_played ? (Date.now() - new Date(game.last_played).getTime()) / 86_400_000 : null;
+				const recencyFactor = daysSince !== null ? Math.exp(-daysSince / 7) : 1.0;
+				const genreFactor = recentGenres.length && game.genre?.length ? (game.genre.some((g) => recentGenres.includes(g)) ? 0.8 : 1.2) : 1.0;
+				const backlogDays = game.date_added ? (Date.now() - new Date(game.date_added).getTime()) / 86_400_000 : 0;
+				const ageFactor = 1 + Math.tanh(backlogDays / 365) * 0.5;
+				const statusFactor = game.status === 'playing' ? 1.5 : 1.0;
+				const score = P * restFactor * recencyFactor * genreFactor * ageFactor * statusFactor;
+				return { game, score, debug: { P, restFactor, recencyFactor, genreFactor, ageFactor, statusFactor } };
+			})
 			.sort((a, b) => b.score - a.score)
-			.slice(0, 3)
-			.map((item) => item.game);
+			.slice(0, 3);
 	})();
 
 	async function loadGames() {
@@ -297,9 +312,18 @@
 
 	{#if !loading && nextUpGames.length > 0}
 		<div class="mb-8">
-			<h2 class="text-xl font-bold text-gray-900 dark:text-white mb-3">🎯 Next Up</h2>
+			<div class="flex items-center gap-3 mb-3">
+				<h2 class="text-xl font-bold text-gray-900 dark:text-white">🎯 Next Up</h2>
+				<button
+					on:click={() => (showDebug = !showDebug)}
+					class="text-[10px] px-2 py-0.5 rounded font-mono transition-colors {showDebug ? 'bg-yellow-400 text-gray-900' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'}"
+				>
+					{showDebug ? 'debug: on' : 'debug'}
+				</button>
+			</div>
 			<div class="flex gap-3 overflow-x-auto pb-1">
-				{#each nextUpGames as game (game.id)}
+				{#each nextUpGames as item (item.game.id)}
+					{@const game = item.game}
 					{@const t = getTargetHours(game)}
 					{@const prog = Math.min(100, t > 0 ? (game.played_hours / t) * 100 : 0)}
 					{@const progColor = prog < 30 ? 'bg-red-500' : prog < 70 ? 'bg-yellow-500' : 'bg-green-500'}
@@ -346,6 +370,17 @@
 							</div>
 							{:else}
 							<p class="text-[9px] text-amber-500 dark:text-amber-400">Set target time</p>
+							{/if}
+							{#if showDebug}
+							<div class="mt-1.5 border-t border-yellow-400/30 pt-1 space-y-0.5 font-mono text-[8px] text-yellow-400">
+								<div class="flex justify-between"><span>score</span><span>{item.score.toFixed(4)}</span></div>
+								<div class="flex justify-between"><span>P</span><span>{item.debug.P.toFixed(2)}</span></div>
+								<div class="flex justify-between"><span>rest</span><span>{item.debug.restFactor.toFixed(3)}</span></div>
+								<div class="flex justify-between"><span>recency</span><span>{item.debug.recencyFactor.toFixed(3)}</span></div>
+								<div class="flex justify-between"><span>genre</span><span>{item.debug.genreFactor.toFixed(2)}</span></div>
+								<div class="flex justify-between"><span>age</span><span>{item.debug.ageFactor.toFixed(3)}</span></div>
+								<div class="flex justify-between"><span>status</span><span>{item.debug.statusFactor.toFixed(2)}</span></div>
+							</div>
 							{/if}
 						</div>
 					</div>

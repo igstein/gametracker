@@ -1,5 +1,26 @@
 export type GameStatus = 'playing' | 'backlog' | 'finished' | 'abandoned';
 export type GamePriority = 'must_play' | 'high' | 'medium' | 'low';
+export type GameGenre =
+	| 'Action'
+	| 'Action RPG'
+	| 'Adventure'
+	| 'Card Game'
+	| 'Fighting'
+	| 'Horror'
+	| 'JRPG'
+	| 'MMORPG'
+	| 'Platformer'
+	| 'Puzzle'
+	| 'Racing'
+	| 'RPG'
+	| 'Shooter'
+	| 'Simulation'
+	| 'Sports'
+	| 'Strategy'
+	| 'Stealth'
+	| 'Survival'
+	| 'Tactical RPG'
+	| 'Visual Novel';
 
 export interface Game {
 	id: string;
@@ -14,7 +35,7 @@ export interface Game {
 	priority: GamePriority;
 	last_played?: string;
 	date_added?: string;
-	genre?: string | null;
+	genre?: GameGenre[] | null;
 	custom_target_hours?: number | null;
 }
 

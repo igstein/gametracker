@@ -199,7 +199,6 @@ function sanitizeNumber(value: unknown): number {
 function validateAndSanitizeResult(entry: any): HLTBSearchResult | null {
 	try {
 		if (!entry || typeof entry !== 'object') return null;
-
 		const id = typeof entry.game_id === 'number' ? entry.game_id : 0;
 		const title = sanitizeString(entry.game_name);
 
