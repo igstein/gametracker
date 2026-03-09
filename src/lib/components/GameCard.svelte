@@ -8,7 +8,7 @@
 	const targetHours = getTargetHours(game);
 
 	// Calculate progress percentage
-	const progress = Math.min(100, (game.played_hours / targetHours) * 100);
+	const progress = targetHours > 0 ? Math.min(100, (game.played_hours / targetHours) * 100) : -1;
 
 	// Determine progress bar color
 	let progressColor = '';
@@ -65,14 +65,18 @@
 		</div>
 
 		<!-- Progress Bar -->
+		{#if progress >= 0}
 		<div class="space-y-1.5">
 			<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
-				<div class="{progressColor} h-full transition-all" style="width: {Math.min(100, progress)}%"></div>
+				<div class="{progressColor} h-full transition-all" style="width: {progress}%"></div>
 			</div>
 			<div class="flex justify-between text-[10px] text-gray-600 dark:text-gray-400">
 				<span>{Math.round(game.played_hours * 10) / 10}h / {targetHours.toFixed(0)}h</span>
 				<span>{progress.toFixed(0)}%</span>
 			</div>
 		</div>
+		{:else}
+		<p class="text-[10px] text-amber-500 dark:text-amber-400">Set target time</p>
+		{/if}
 	</div>
 </div>
