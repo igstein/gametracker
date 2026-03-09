@@ -294,34 +294,54 @@
 
 	{#if !loading && nextUpGames.length > 0}
 		<div class="mb-8">
-			<h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">🎯 Next Up</h2>
-			<p class="text-gray-600 dark:text-gray-400 text-sm mb-4">
-				Games with the shortest remaining time — finish these first!
-			</p>
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+			<h2 class="text-xl font-bold text-gray-900 dark:text-white mb-3">🎯 Next Up</h2>
+			<div class="flex gap-3 overflow-x-auto pb-1">
 				{#each nextUpGames as game (game.id)}
-					<button
+					{@const t = getTargetHours(game)}
+					{@const prog = Math.min(100, t > 0 ? (game.played_hours / t) * 100 : 0)}
+					{@const progColor = prog < 30 ? 'bg-red-500' : prog < 70 ? 'bg-yellow-500' : 'bg-green-500'}
+					{@const priorityConfig = { must_play: { icon: '★', color: 'text-yellow-400' }, high: { icon: '●', color: 'text-gray-400' }, medium: { icon: '●', color: 'text-amber-600' }, low: { icon: '○', color: 'text-gray-600' } }}
+					{@const prio = priorityConfig[game.priority]}
+					<div
 						on:click={() => openGameDetail(game)}
-						class="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 transition-colors text-left"
+						on:keydown={(e) => e.key === 'Enter' && openGameDetail(game)}
+						role="button"
+						tabindex="0"
+						class="flex-shrink-0 w-24 bg-white dark:bg-gray-800 rounded-lg overflow-hidden cursor-pointer border relative transition-colors hover:bg-gray-50 dark:hover:bg-gray-750 {game.status === 'finished' ? 'border-green-500' : game.status === 'abandoned' ? 'border-gray-400' : 'border-gray-200 dark:border-gray-700'}"
 					>
-						{#if game.cover_image_url}
-							<img
-								src={game.cover_image_url}
-								alt={game.title}
-								class="w-16 h-20 object-cover rounded"
-							/>
-						{:else}
-							<div class="w-16 h-20 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
-								<span class="text-3xl">🎮</span>
-							</div>
+						{#if game.status === 'finished'}
+							<span class="absolute top-1 right-1 z-10 bg-green-600 text-white text-[7px] font-bold uppercase px-1 py-0.5 rounded tracking-wide">✓</span>
+						{:else if game.status === 'abandoned'}
+							<span class="absolute top-1 right-1 z-10 bg-gray-400 text-white text-[7px] font-bold uppercase px-1 py-0.5 rounded tracking-wide">✗</span>
 						{/if}
-						<div class="flex-1 min-w-0">
-							<h3 class="text-gray-900 dark:text-white font-medium truncate">{game.title}</h3>
-							<p class="text-gray-600 dark:text-gray-400 text-sm">
-								{getRemainingHours(game).toFixed(1)}h remaining
-							</p>
+						<div class="aspect-square bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+							{#if game.cover_image_url}
+								<img
+									src={game.cover_image_url}
+									alt={game.title}
+									class="w-full h-full object-cover"
+									style={game.status === 'finished' ? 'filter: brightness(0.5) saturate(0.7);' : game.status === 'abandoned' ? 'filter: brightness(0.35) saturate(0.4);' : ''}
+								/>
+							{:else}
+								<span class="text-2xl">🎮</span>
+							{/if}
 						</div>
-					</button>
+						<div class="p-2">
+							<div class="flex items-start justify-between gap-1 mb-1.5">
+								<h3 class="font-semibold text-gray-900 dark:text-white text-[10px] line-clamp-2 flex-1">{game.title}</h3>
+								<span class="text-xs {prio.color} flex-shrink-0">{prio.icon}</span>
+							</div>
+							<div class="space-y-1">
+								<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 overflow-hidden">
+									<div class="{progColor} h-full transition-all" style="width: {prog}%"></div>
+								</div>
+								<div class="flex justify-between text-[9px] text-gray-600 dark:text-gray-400">
+									<span>{Math.round(game.played_hours * 10) / 10}h / {t.toFixed(0)}h</span>
+									<span>{prog.toFixed(0)}%</span>
+								</div>
+							</div>
+						</div>
+					</div>
 				{/each}
 			</div>
 		</div>
