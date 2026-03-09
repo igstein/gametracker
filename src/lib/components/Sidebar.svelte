@@ -137,7 +137,7 @@
 		md:translate-x-0 md:static md:z-auto md:transition-none
 	"
 >
-	<div class="p-6 flex items-center justify-between">
+	<div class="p-6 safe-top flex items-center justify-between">
 		<h1 class="text-2xl font-bold text-gray-900 dark:text-white">GameTracker</h1>
 		<button
 			class="md:hidden text-gray-500 hover:text-gray-900 dark:hover:text-white text-2xl leading-none"
@@ -179,7 +179,7 @@
 		</ul>
 	</nav>
 
-	<div class="p-4 space-y-2">
+	<div class="p-4 space-y-2 safe-bottom">
 		<button
 			on:click={onAddGame}
 			class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"

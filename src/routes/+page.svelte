@@ -281,7 +281,7 @@
 	});
 </script>
 
-<div class="p-4 md:p-8">
+<div class="p-4 md:p-8 safe-bottom">
 	<!-- Realtime Connection Status -->
 	{#if realtimeConnected}
 		<div

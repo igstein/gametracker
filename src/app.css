@@ -10,3 +10,9 @@
 .safe-left {
 	padding-left: max(0px, env(safe-area-inset-left));
 }
+.safe-bottom {
+	padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+.safe-right {
+	padding-right: max(0px, env(safe-area-inset-right));
+}
