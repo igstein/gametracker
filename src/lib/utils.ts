@@ -39,10 +39,10 @@ export function scoreGame(game: Game, recentGenres: string[] = []): number {
 export function getTargetHours(game: Game): number {
 	if (game.custom_target_hours != null) return game.custom_target_hours;
 	if (game.main_plus_extras_hours) {
-		return game.main_plus_extras_hours * 1.10;
+		return game.main_plus_extras_hours * 1.20;
 	}
 	if (game.main_story_hours) {
-		return game.main_story_hours * 1.10;
+		return game.main_story_hours * 1.20;
 	}
 	return 0;
 }
