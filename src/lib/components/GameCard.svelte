@@ -22,10 +22,10 @@
 
 	// Priority icon and color
 	const priorityConfig = {
-		must_play: { icon: '★', color: 'text-yellow-400' },
-		high: { icon: '●', color: 'text-gray-400' },
-		medium: { icon: '●', color: 'text-amber-600' },
-		low: { icon: '○', color: 'text-gray-600' }
+		must_play: { icon: '★', color: 'text-yellow-400', label: 'Must Play' },
+		high: { icon: '●', color: 'text-gray-400', label: 'High' },
+		medium: { icon: '●', color: 'text-amber-600', label: 'Medium' },
+		low: { icon: '○', color: 'text-gray-600', label: 'Low' }
 	};
 
 	const priority = priorityConfig[game.priority];
@@ -61,7 +61,7 @@
 	<div class="p-3">
 		<div class="flex items-start justify-between gap-1.5 mb-2">
 			<h3 class="font-semibold text-gray-900 dark:text-white text-xs line-clamp-2 flex-1">{game.title}</h3>
-			<span class="text-base {priority.color} flex-shrink-0">{priority.icon}</span>
+			<span class="text-base {priority.color} flex-shrink-0" title={priority.label}>{priority.icon}</span>
 		</div>
 
 		<!-- Progress Bar -->

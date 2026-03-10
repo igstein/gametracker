@@ -425,7 +425,7 @@
 					{@const t = getTargetHours(game)}
 					{@const prog = Math.min(100, t > 0 ? (game.played_hours / t) * 100 : 0)}
 					{@const progColor = prog < 30 ? 'bg-red-500' : prog < 70 ? 'bg-yellow-500' : 'bg-green-500'}
-					{@const priorityConfig = { must_play: { icon: '★', color: 'text-yellow-400' }, high: { icon: '●', color: 'text-gray-400' }, medium: { icon: '●', color: 'text-amber-600' }, low: { icon: '○', color: 'text-gray-600' } }}
+					{@const priorityConfig = { must_play: { icon: '★', color: 'text-yellow-400', label: 'Must Play' }, high: { icon: '●', color: 'text-gray-400', label: 'High' }, medium: { icon: '●', color: 'text-amber-600', label: 'Medium' }, low: { icon: '○', color: 'text-gray-600', label: 'Low' } }}
 					{@const prio = priorityConfig[game.priority]}
 					<div
 						on:click={() => openGameDetail(game)}
@@ -454,7 +454,7 @@
 						<div class="p-2">
 							<div class="flex items-start justify-between gap-1 mb-1.5">
 								<h3 class="font-semibold text-gray-900 dark:text-white text-[10px] line-clamp-2 flex-1">{game.title}</h3>
-								<span class="text-xs {prio.color} flex-shrink-0">{prio.icon}</span>
+								<span class="text-xs {prio.color} flex-shrink-0" title={prio.label}>{prio.icon}</span>
 							</div>
 							{#if t > 0}
 							<div class="space-y-1">
