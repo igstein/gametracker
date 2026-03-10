@@ -82,6 +82,12 @@
 					return bDate - aDate;
 				});
 				break;
+			case 'remaining_asc':
+				sorted.sort((a, b) => getRemainingHours(a) - getRemainingHours(b));
+				break;
+			case 'remaining_desc':
+				sorted.sort((a, b) => getRemainingHours(b) - getRemainingHours(a));
+				break;
 			case 'created_at_desc':
 			default:
 				// Already sorted by created_at desc from Supabase
@@ -507,6 +513,8 @@
 				<option value="progress_desc">Progress (High to Low)</option>
 				<option value="priority">Priority</option>
 				<option value="last_played">Last Played</option>
+				<option value="remaining_asc">Remaining Time (Low to High)</option>
+				<option value="remaining_desc">Remaining Time (High to Low)</option>
 			</select>
 		</div>
 	</div>
