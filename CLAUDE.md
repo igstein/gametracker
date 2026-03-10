@@ -33,8 +33,8 @@ Default priority for new games: **Medium**.
 ### 2.3 HLTB Integration
 - Search games via the HLTB web endpoint
 - Retrieve times: Main Story, Main + Extras, Completionist
-- **Target time calculation:** Average of "Main Story" and "Main + Extras"
-  - Example: Main Story = 30h, Main + Extras = 45h → Target = 37.5h
+- **Target time calculation:** Main + Extras × 1.20 (falls back to Main Story × 1.20 if unavailable)
+  - Example: Main + Extras = 45h → Target = 54h
 - Cover image URL extracted from HLTB data
 - Fallback: Games can be added manually without HLTB data (custom target time)
 
@@ -148,8 +148,8 @@ CREATE POLICY "Users manage own notes" ON game_notes
 
 ### Computed Values (App-Side)
 ```typescript
-// Target hours: average of Main Story and Main + Extras
-const targetHours = (game.main_story_hours + game.main_plus_extras_hours) / 2;
+// Target hours: Main + Extras * 1.20 (fallback to Main Story * 1.20)
+const targetHours = (game.main_plus_extras_hours ?? game.main_story_hours ?? 0) * 1.20;
 
 // Progress percentage
 const progress = targetHours > 0 ? (game.played_hours / targetHours) * 100 : 0;

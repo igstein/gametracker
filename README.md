@@ -13,7 +13,10 @@ Built as a Progressive Web App (PWA) — installable on macOS, Linux, and iOS fr
 - **Track playtime** — add or remove hours/minutes, see your progress against the HLTB community average
 - **Priority levels** — mark games as Must Play, High, Medium, or Low priority
 - **Status markers** — finished games get a green border and badge with dimmed cover; abandoned games get a gray badge with a darker dimmed cover
-- **Next Up section** — always shows the 3 games closest to completion to keep you motivated
+- **Next Up section** — shows the 3 best games to play next, scored by priority, progress, recency, genre diversity, and backlog age
+- **Mood filter** — set a genre and/or platform mood above the Next Up section to boost matching games in the recommendations; resets daily at 7am
+- **Genre tags** — tag games with one or more genres; used by the scoring algorithm to recommend variety
+- **Platform tags** — tag games with the platforms you own (user-defined); used by the mood filter
 - **Game journal** — private dated notes per game for strategies, session logs, or anything else
 - **Filter and sort** — by status (Playing, Backlog, Finished, Abandoned), name, progress, priority, or last played
 - **Configurable default view** — pin any filter as your default landing view
@@ -34,7 +37,7 @@ Built as a Progressive Web App (PWA) — installable on macOS, Linux, and iOS fr
 4. If a game isn't on HLTB, use **"Add manually"** to enter a custom target time and cover image
 
 ### Tracking progress
-- Open any game card to add or remove playtime, change status, or adjust priority
+- Open any game card to add or remove playtime, change status, adjust priority, set genre tags, or set platform tags
 - The progress bar turns red (0–30%), yellow (31–70%), and green (71–100%) as you play
 
 ### Journal
