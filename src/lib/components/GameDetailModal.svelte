@@ -25,6 +25,7 @@
 	export let onClose: () => void;
 	export let onGameUpdated: () => void;
 	export let onGameDeleted: () => void = () => {};
+	export let availablePlatforms: string[] = [];
 
 	$: supabase = $page.data.supabase;
 
@@ -40,6 +41,9 @@
 	let customTargetInput = 0;
 	let editingGenres = false;
 	let selectedGenres: GameGenre[] = [];
+	let editingPlatforms = false;
+	let selectedPlatforms: string[] = [];
+	let newPlatformInput = '';
 
 	// Journal state
 	let notes: GameNote[] = [];
@@ -67,6 +71,9 @@
 		customTargetInput = 0;
 		editingGenres = false;
 		selectedGenres = [...(game.genre ?? [])];
+		editingPlatforms = false;
+		selectedPlatforms = [...(game.platform ?? [])];
+		newPlatformInput = '';
 		loadNotes();
 		setupNotesRealtimeSubscription();
 	}
@@ -438,6 +445,35 @@
 		}
 	}
 
+	async function savePlatforms() {
+		if (!game) return;
+		saving = true;
+		error = '';
+		try {
+			const { error: updateError } = await supabase
+				.from('games')
+				.update({ platform: selectedPlatforms.length ? selectedPlatforms : null })
+				.eq('id', game.id);
+			if (updateError) throw updateError;
+			game = { ...game, platform: selectedPlatforms.length ? selectedPlatforms : null };
+			editingPlatforms = false;
+			newPlatformInput = '';
+			onGameUpdated();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to save platforms';
+		} finally {
+			saving = false;
+		}
+	}
+
+	function addNewPlatform() {
+		const trimmed = newPlatformInput.trim();
+		if (trimmed && !selectedPlatforms.includes(trimmed)) {
+			selectedPlatforms = [...selectedPlatforms, trimmed];
+		}
+		newPlatformInput = '';
+	}
+
 	function formatDate(dateString: string): string {
 		const date = new Date(dateString);
 		return date.toLocaleDateString('en-US', {
@@ -501,6 +537,63 @@
 								<div class="flex gap-2">
 									<button type="button" on:click={() => editingGenres = false} class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded-lg transition-colors">Cancel</button>
 									<button type="button" on:click={saveGenres} disabled={saving} class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50">Save</button>
+								</div>
+							</div>
+						{/if}
+					</div>
+					<!-- Platform -->
+					<div class="mt-2">
+						{#if !editingPlatforms}
+							<div class="flex flex-wrap gap-1.5 items-center">
+								{#if game.platform?.length}
+									{#each game.platform as p}
+										<span class="px-2 py-0.5 bg-indigo-900/50 text-indigo-300 text-xs rounded-full">{p}</span>
+									{/each}
+								{:else}
+									<span class="text-gray-500 text-xs">No platforms set</span>
+								{/if}
+								<button
+									type="button"
+									on:click={() => { selectedPlatforms = [...(game?.platform ?? [])]; editingPlatforms = true; }}
+									class="text-gray-500 hover:text-gray-300 text-xs ml-1"
+								>Edit</button>
+							</div>
+						{:else}
+							<div class="bg-gray-700 rounded-lg p-3 mt-1">
+								{#if availablePlatforms.length > 0}
+									<div class="flex flex-wrap gap-2 mb-3">
+										{#each availablePlatforms as p}
+											<button
+												type="button"
+												on:click={() => selectedPlatforms = selectedPlatforms.includes(p) ? selectedPlatforms.filter(x => x !== p) : [...selectedPlatforms, p]}
+												class="px-2 py-0.5 text-xs rounded-full transition-colors {selectedPlatforms.includes(p) ? 'bg-indigo-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}"
+											>{p}</button>
+										{/each}
+									</div>
+								{/if}
+								<div class="flex gap-2 mb-3">
+									<input
+										type="text"
+										bind:value={newPlatformInput}
+										placeholder="Add platform (e.g. PC, PS5)"
+										on:keydown={(e) => e.key === 'Enter' && (e.preventDefault(), addNewPlatform())}
+										class="flex-1 px-3 py-1 bg-gray-600 text-white text-xs rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+									/>
+									<button type="button" on:click={addNewPlatform} class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-lg transition-colors">Add</button>
+								</div>
+								{#if selectedPlatforms.length > 0}
+									<div class="flex flex-wrap gap-1.5 mb-3">
+										{#each selectedPlatforms as p}
+											<span class="flex items-center gap-1 px-2 py-0.5 bg-indigo-900/50 text-indigo-300 text-xs rounded-full">
+												{p}
+												<button type="button" on:click={() => selectedPlatforms = selectedPlatforms.filter(x => x !== p)} class="text-indigo-400 hover:text-white leading-none">×</button>
+											</span>
+										{/each}
+									</div>
+								{/if}
+								<div class="flex gap-2">
+									<button type="button" on:click={() => { editingPlatforms = false; newPlatformInput = ''; }} class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded-lg transition-colors">Cancel</button>
+									<button type="button" on:click={savePlatforms} disabled={saving} class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50">Save</button>
 								</div>
 							</div>
 						{/if}

@@ -88,6 +88,9 @@
 		return sorted;
 	})();
 
+	// Unique platforms across all games (for quick-select in detail modal)
+	$: availablePlatforms = [...new Set(games.flatMap((g) => g.platform ?? []))].sort();
+
 	// Next Up: Top 3 games scored by priority, recency, completion, genre diversity and age
 	$: nextUpGames = (() => {
 		const candidates = games.filter(
@@ -452,4 +455,5 @@
 	onClose={closeGameDetail}
 	onGameUpdated={handleGameUpdated}
 	onGameDeleted={handleGameUpdated}
+	{availablePlatforms}
 />

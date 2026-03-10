@@ -38,6 +38,7 @@ export interface Game {
 	last_played?: string;
 	date_added?: string;
 	genre?: GameGenre[] | null;
+	platform?: string[] | null;
 	custom_target_hours?: number | null;
 }
 
