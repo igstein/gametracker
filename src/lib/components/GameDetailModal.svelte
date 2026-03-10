@@ -5,9 +5,10 @@
 	import type { Game, GameStatus, GamePriority, GameGenre, GameNote } from '$lib/types';
 
 	const GENRES: GameGenre[] = [
-		'Action', 'Action RPG', 'Adventure', 'Card Game', 'Fighting', 'Horror',
-		'JRPG', 'MMORPG', 'Platformer', 'Puzzle', 'Racing', 'RPG', 'Shooter',
-		'Simulation', 'Sports', 'Strategy', 'Stealth', 'Survival', 'Tactical RPG', 'Visual Novel'
+		'Action', 'Action RPG', 'Adventure', 'Card Game', 'Fighting', 'First Person Shooter',
+		'Horror', 'JRPG', 'MMORPG', 'Platformer', 'Point and Click', 'Puzzle', 'Racing',
+		'RPG', 'Shooter', 'Simulation', 'Sports', 'Strategy', 'Stealth', 'Survival',
+		'Tactical RPG', 'Visual Novel'
 	];
 	import { getTargetHours } from '$lib/utils';
 	import type { RealtimeChannel } from '@supabase/supabase-js';

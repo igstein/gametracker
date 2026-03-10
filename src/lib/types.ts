@@ -17,6 +17,8 @@ export type GameGenre =
 	| 'Simulation'
 	| 'Sports'
 	| 'Strategy'
+	| 'First Person Shooter'
+	| 'Point and Click'
 	| 'Stealth'
 	| 'Survival'
 	| 'Tactical RPG'
