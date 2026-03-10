@@ -27,6 +27,9 @@
 	let realtimeChannel: RealtimeChannel | null = null;
 	let realtimeConnected = false;
 	let showDebug = false;
+	let moodGenre: string | null = null;
+	let moodPlatform: string | null = null;
+	let showMoodPicker = false;
 
 	$: supabase = $page.data.supabase;
 
@@ -91,6 +94,10 @@
 	// Unique platforms across all games (for quick-select in detail modal)
 	$: availablePlatforms = [...new Set(games.flatMap((g) => g.platform ?? []))].sort();
 
+	// Mood options derived from games that have data
+	$: moodGenreOptions = [...new Set(games.flatMap((g) => g.genre ?? []))].sort();
+	$: moodPlatformOptions = availablePlatforms;
+
 	// Next Up: Top 3 games scored by priority, recency, completion, genre diversity and age
 	$: nextUpGames = (() => {
 		const candidates = games.filter(
@@ -117,8 +124,11 @@
 				const backlogDays = game.date_added ? (Date.now() - new Date(game.date_added).getTime()) / 86_400_000 : 0;
 				const ageFactor = 1 + Math.tanh(backlogDays / 365) * 0.5;
 				const statusFactor = game.status === 'playing' ? 1.5 : 1.0;
-				const score = P * restFactor * recencyFactor * genreFactor * ageFactor * statusFactor;
-				return { game, score, debug: { P, restFactor, recencyFactor, genreFactor, ageFactor, statusFactor } };
+				const moodGenreFactor = moodGenre ? (game.genre?.includes(moodGenre) ? 1.3 : 0.9) : 1.0;
+				const moodPlatformFactor = moodPlatform ? (game.platform?.includes(moodPlatform) ? 1.25 : 0.9) : 1.0;
+				const moodFactor = moodGenreFactor * moodPlatformFactor;
+				const score = P * restFactor * recencyFactor * genreFactor * ageFactor * statusFactor * moodFactor;
+				return { game, score, debug: { P, restFactor, recencyFactor, genreFactor, ageFactor, statusFactor, moodFactor } };
 			})
 			.sort((a, b) => b.score - a.score)
 			.slice(0, 3);
@@ -276,10 +286,44 @@
 			});
 	}
 
+	function loadMood() {
+		if (!browser) return;
+		const stored = localStorage.getItem('gametracker_mood');
+		if (!stored) return;
+		try {
+			const data = JSON.parse(stored);
+			const setAt = new Date(data.setAt);
+			const today7am = new Date();
+			today7am.setHours(7, 0, 0, 0);
+			if (setAt < today7am) {
+				localStorage.removeItem('gametracker_mood');
+				return;
+			}
+			moodGenre = data.genre ?? null;
+			moodPlatform = data.platform ?? null;
+		} catch {
+			localStorage.removeItem('gametracker_mood');
+		}
+	}
+
+	function saveMood() {
+		if (!browser) return;
+		if (!moodGenre && !moodPlatform) {
+			localStorage.removeItem('gametracker_mood');
+		} else {
+			localStorage.setItem('gametracker_mood', JSON.stringify({
+				genre: moodGenre,
+				platform: moodPlatform,
+				setAt: new Date().toISOString()
+			}));
+		}
+	}
+
 	onMount(async () => {
 		// Initialize IndexedDB
 		await initDB();
 
+		loadMood();
 		loadGames();
 		setupRealtimeSubscription();
 
@@ -315,8 +359,26 @@
 
 	{#if !loading && nextUpGames.length > 0}
 		<div class="mb-8">
-			<div class="flex items-center gap-3 mb-3">
+			<div class="flex items-center gap-2 mb-2 flex-wrap">
 				<h2 class="text-xl font-bold text-gray-900 dark:text-white">🎯 Next Up</h2>
+				{#if moodGenre}
+					<span class="flex items-center gap-1 px-2 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded-full">
+						{moodGenre}
+						<button on:click={() => { moodGenre = null; saveMood(); }} class="text-purple-400 hover:text-white leading-none">×</button>
+					</span>
+				{/if}
+				{#if moodPlatform}
+					<span class="flex items-center gap-1 px-2 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded-full">
+						{moodPlatform}
+						<button on:click={() => { moodPlatform = null; saveMood(); }} class="text-purple-400 hover:text-white leading-none">×</button>
+					</span>
+				{/if}
+				<button
+					on:click={() => (showMoodPicker = !showMoodPicker)}
+					class="text-[10px] px-2 py-0.5 rounded transition-colors {showMoodPicker ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'}"
+				>
+					{showMoodPicker ? 'done' : '+ mood'}
+				</button>
 				<button
 					on:click={() => (showDebug = !showDebug)}
 					class="text-[10px] px-2 py-0.5 rounded font-mono transition-colors {showDebug ? 'bg-yellow-400 text-gray-900' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'}"
@@ -324,6 +386,39 @@
 					{showDebug ? 'debug: on' : 'debug'}
 				</button>
 			</div>
+			{#if showMoodPicker}
+				<div class="bg-gray-100 dark:bg-gray-800/80 rounded-lg p-3 mb-3 border border-gray-200 dark:border-gray-700">
+					{#if moodGenreOptions.length > 0}
+						<div class="mb-2">
+							<p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Genre</p>
+							<div class="flex flex-wrap gap-1.5">
+								{#each moodGenreOptions as g}
+									<button
+										on:click={() => { moodGenre = moodGenre === g ? null : g; saveMood(); }}
+										class="px-2 py-0.5 text-xs rounded-full transition-colors {moodGenre === g ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
+									>{g}</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
+					{#if moodPlatformOptions.length > 0}
+						<div>
+							<p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Platform</p>
+							<div class="flex flex-wrap gap-1.5">
+								{#each moodPlatformOptions as p}
+									<button
+										on:click={() => { moodPlatform = moodPlatform === p ? null : p; saveMood(); }}
+										class="px-2 py-0.5 text-xs rounded-full transition-colors {moodPlatform === p ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
+									>{p}</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
+					{#if moodGenreOptions.length === 0 && moodPlatformOptions.length === 0}
+						<p class="text-xs text-gray-500">Add genres and platforms to your games first.</p>
+					{/if}
+				</div>
+			{/if}
 			<div class="flex gap-3 overflow-x-auto pb-1">
 				{#each nextUpGames as item (item.game.id)}
 					{@const game = item.game}
@@ -383,6 +478,7 @@
 								<div class="flex justify-between"><span>genre</span><span>{item.debug.genreFactor.toFixed(2)}</span></div>
 								<div class="flex justify-between"><span>age</span><span>{item.debug.ageFactor.toFixed(3)}</span></div>
 								<div class="flex justify-between"><span>status</span><span>{item.debug.statusFactor.toFixed(2)}</span></div>
+								<div class="flex justify-between"><span>mood</span><span>{item.debug.moodFactor.toFixed(2)}</span></div>
 							</div>
 							{/if}
 						</div>
