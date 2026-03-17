@@ -17,6 +17,7 @@
 	const showAddGameModal = writable(false);
 	let defaultFilter = browser ? (localStorage.getItem('defaultFilter') || 'all') : 'all';
 	const activeFilter = writable<string>(defaultFilter);
+	const activePriorityFilter = writable<string>('all');
 	const sortBy = writable<string>('created_at_desc');
 	let showShortcutsHelp = false;
 	let mobileSidebarOpen = false;
@@ -28,6 +29,7 @@
 	});
 
 	setContext('activeFilter', activeFilter);
+	setContext('activePriorityFilter', activePriorityFilter);
 	setContext('sortBy', sortBy);
 
 	function openAddGameModal() {
@@ -46,6 +48,10 @@
 
 	function handleFilterChange(filter: string) {
 		activeFilter.set(filter);
+	}
+
+	function handlePriorityFilterChange(priority: string) {
+		activePriorityFilter.set(priority);
 	}
 
 	function handleSetDefault(filter: string) {
@@ -178,6 +184,8 @@
 			activeFilter={$activeFilter}
 			{defaultFilter}
 			onSetDefault={handleSetDefault}
+			activePriorityFilter={$activePriorityFilter}
+			onPriorityFilterChange={handlePriorityFilterChange}
 			mobileOpen={mobileSidebarOpen}
 			onMobileClose={() => (mobileSidebarOpen = false)}
 			onDataImported={handleGameAdded}

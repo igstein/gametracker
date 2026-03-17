@@ -34,6 +34,7 @@
 	$: supabase = $page.data.supabase;
 
 	const activeFilter = getContext<Writable<string>>('activeFilter');
+	const activePriorityFilter = getContext<Writable<string>>('activePriorityFilter');
 	const sortBy = getContext<Writable<string>>('sortBy');
 	const registerCallback = getContext<(callback: () => void) => void>('registerGameAddedCallback');
 
@@ -54,6 +55,11 @@
 		let filtered = games;
 		if ($activeFilter !== 'all') {
 			filtered = games.filter((game) => game.status === $activeFilter);
+		}
+
+		// Filter by priority
+		if ($activePriorityFilter !== 'all') {
+			filtered = filtered.filter((game) => game.priority === $activePriorityFilter);
 		}
 
 		// Sort

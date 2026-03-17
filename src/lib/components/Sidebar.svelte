@@ -7,6 +7,8 @@
 	export let activeFilter: string = 'all';
 	export let defaultFilter: string = 'all';
 	export let onSetDefault: (filter: string) => void = () => {};
+	export let activePriorityFilter: string = 'all';
+	export let onPriorityFilterChange: (priority: string) => void = () => {};
 	export let mobileOpen: boolean = false;
 	export let onMobileClose: () => void = () => {};
 	export let onDataImported: () => void = () => {};
@@ -17,6 +19,14 @@
 		{ id: 'backlog', label: 'Backlog', icon: '📋' },
 		{ id: 'finished', label: 'Finished', icon: '✅' },
 		{ id: 'abandoned', label: 'Abandoned', icon: '❌' }
+	];
+
+	const priorityFilters = [
+		{ id: 'all', label: 'All' },
+		{ id: 'must_play', label: 'Must Play', symbol: '★', color: '#FFD700' },
+		{ id: 'high', label: 'High', symbol: '●', color: '#A0AEC0' },
+		{ id: 'medium', label: 'Medium', symbol: '●', color: '#CD7F32' },
+		{ id: 'low', label: 'Low', symbol: '○', color: '#9CA3AF' }
 	];
 
 	let importInput: HTMLInputElement;
@@ -146,37 +156,65 @@
 		>×</button>
 	</div>
 
-	<nav class="flex-1 px-4 overflow-y-auto">
-		<ul class="space-y-2">
-			{#each filters as filter}
-				<li>
-					<div class="flex items-center gap-1">
-						<button
-							on:click={() => setFilter(filter.id)}
-							class="flex-1 flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-colors {activeFilter ===
-							filter.id
-								? 'bg-blue-600 text-white'
-								: 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
-						>
-							<span class="text-lg">{filter.icon}</span>
-							<span class="font-medium">{filter.label}</span>
-							{#if filter.id === defaultFilter}
-								<span class="ml-auto text-xs opacity-60" title="Default view">📌</span>
-							{/if}
-						</button>
-						{#if activeFilter === filter.id && filter.id !== defaultFilter}
+	<nav class="flex-1 px-3 overflow-y-auto space-y-4">
+		<!-- Status filters -->
+		<div>
+			<p class="px-1 mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Status</p>
+			<ul class="space-y-0.5">
+				{#each filters as filter}
+					<li>
+						<div class="flex items-center gap-1">
 							<button
-								on:click={() => onSetDefault(filter.id)}
-								class="px-1.5 py-1.5 text-gray-400 hover:text-blue-400 transition-colors rounded"
-								title="Set as default view"
+								on:click={() => setFilter(filter.id)}
+								class="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-md text-left text-sm transition-colors {activeFilter === filter.id
+									? 'bg-blue-600 text-white'
+									: 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}"
 							>
-								<span class="text-xs">📌</span>
+								<span class="text-sm">{filter.icon}</span>
+								<span>{filter.label}</span>
+								{#if filter.id === defaultFilter}
+									<span class="ml-auto text-xs opacity-60" title="Default view">📌</span>
+								{/if}
 							</button>
-						{/if}
-					</div>
-				</li>
-			{/each}
-		</ul>
+							{#if activeFilter === filter.id && filter.id !== defaultFilter}
+								<button
+									on:click={() => onSetDefault(filter.id)}
+									class="px-1 py-1 text-gray-400 hover:text-blue-400 transition-colors rounded"
+									title="Set as default view"
+								>
+									<span class="text-xs">📌</span>
+								</button>
+							{/if}
+						</div>
+					</li>
+				{/each}
+			</ul>
+		</div>
+
+		<!-- Priority filters -->
+		<div>
+			<p class="px-1 mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Priority</p>
+			<ul class="space-y-0.5">
+				{#each priorityFilters as pf}
+					<li>
+						<button
+							on:click={() => { onPriorityFilterChange(pf.id); onMobileClose(); }}
+							class="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-left text-sm transition-colors
+								{activePriorityFilter === pf.id
+									? 'bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-white font-semibold'
+									: 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}"
+						>
+							{#if pf.symbol}
+								<span class="text-base leading-none" style="color: {pf.color}; opacity: {activePriorityFilter === pf.id ? 1 : 0.6}">{pf.symbol}</span>
+							{:else}
+								<span class="w-4 inline-block"></span>
+							{/if}
+							<span>{pf.label}</span>
+						</button>
+					</li>
+				{/each}
+			</ul>
+		</div>
 	</nav>
 
 	<div class="p-4 space-y-2 safe-bottom">
