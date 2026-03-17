@@ -131,7 +131,7 @@
 				const P = priorityMap[game.priority];
 				const restFactor = 1 / (rest + 1);
 				const daysSince = game.last_played ? (Date.now() - new Date(game.last_played).getTime()) / 86_400_000 : null;
-				const recencyFactor = daysSince !== null ? Math.exp(-daysSince / 7) : 1.0;
+				const recencyFactor = daysSince !== null ? Math.exp(-daysSince / 7) : 0.5;
 				const genreFactor = recentGenres.length && game.genre?.length ? (game.genre.some((g) => recentGenres.includes(g)) ? 0.8 : 1.2) : 1.0;
 				const backlogDays = game.date_added ? (Date.now() - new Date(game.date_added).getTime()) / 86_400_000 : 0;
 				const ageFactor = 1 + Math.tanh(backlogDays / 365) * 0.5;
