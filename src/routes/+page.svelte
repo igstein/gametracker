@@ -35,6 +35,8 @@
 
 	const activeFilter = getContext<Writable<string>>('activeFilter');
 	const activePriorityFilter = getContext<Writable<string>>('activePriorityFilter');
+	const activePlatformFilter = getContext<Writable<string>>('activePlatformFilter');
+	const availablePlatformsStore = getContext<Writable<string[]>>('availablePlatforms');
 	const sortBy = getContext<Writable<string>>('sortBy');
 	const registerCallback = getContext<(callback: () => void) => void>('registerGameAddedCallback');
 
@@ -60,6 +62,11 @@
 		// Filter by priority
 		if ($activePriorityFilter !== 'all') {
 			filtered = filtered.filter((game) => game.priority === $activePriorityFilter);
+		}
+
+		// Filter by platform
+		if ($activePlatformFilter !== 'all') {
+			filtered = filtered.filter((game) => game.platform?.includes($activePlatformFilter));
 		}
 
 		// Sort
@@ -103,8 +110,9 @@
 		return sorted;
 	})();
 
-	// Unique platforms across all games (for quick-select in detail modal)
+	// Unique platforms across all games (for quick-select in detail modal and sidebar filter)
 	$: availablePlatforms = [...new Set(games.flatMap((g) => g.platform ?? []))].sort();
+	$: availablePlatformsStore.set(availablePlatforms);
 
 	// Mood options derived from games that have data
 	$: moodGenreOptions = [...new Set(games.flatMap((g) => g.genre ?? []))].sort();

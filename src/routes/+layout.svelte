@@ -18,6 +18,8 @@
 	let defaultFilter = browser ? (localStorage.getItem('defaultFilter') || 'all') : 'all';
 	const activeFilter = writable<string>(defaultFilter);
 	const activePriorityFilter = writable<string>('all');
+	const activePlatformFilter = writable<string>('all');
+	const availablePlatforms = writable<string[]>([]);
 	const sortBy = writable<string>('created_at_desc');
 	let showShortcutsHelp = false;
 	let mobileSidebarOpen = false;
@@ -30,6 +32,8 @@
 
 	setContext('activeFilter', activeFilter);
 	setContext('activePriorityFilter', activePriorityFilter);
+	setContext('activePlatformFilter', activePlatformFilter);
+	setContext('availablePlatforms', availablePlatforms);
 	setContext('sortBy', sortBy);
 
 	function openAddGameModal() {
@@ -52,6 +56,10 @@
 
 	function handlePriorityFilterChange(priority: string) {
 		activePriorityFilter.set(priority);
+	}
+
+	function handlePlatformFilterChange(platform: string) {
+		activePlatformFilter.set(platform);
 	}
 
 	function handleSetDefault(filter: string) {
@@ -186,6 +194,9 @@
 			onSetDefault={handleSetDefault}
 			activePriorityFilter={$activePriorityFilter}
 			onPriorityFilterChange={handlePriorityFilterChange}
+			activePlatformFilter={$activePlatformFilter}
+			onPlatformFilterChange={handlePlatformFilterChange}
+			availablePlatforms={$availablePlatforms}
 			mobileOpen={mobileSidebarOpen}
 			onMobileClose={() => (mobileSidebarOpen = false)}
 			onDataImported={handleGameAdded}

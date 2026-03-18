@@ -9,6 +9,9 @@
 	export let onSetDefault: (filter: string) => void = () => {};
 	export let activePriorityFilter: string = 'all';
 	export let onPriorityFilterChange: (priority: string) => void = () => {};
+	export let activePlatformFilter: string = 'all';
+	export let onPlatformFilterChange: (platform: string) => void = () => {};
+	export let availablePlatforms: string[] = [];
 	export let mobileOpen: boolean = false;
 	export let onMobileClose: () => void = () => {};
 	export let onDataImported: () => void = () => {};
@@ -190,6 +193,23 @@
 				{/each}
 			</ul>
 		</div>
+
+		<!-- Platform filter -->
+		{#if availablePlatforms.length > 0}
+		<div>
+			<p class="px-1 mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Platform</p>
+			<select
+				value={activePlatformFilter}
+				on:change={(e) => { onPlatformFilterChange(e.currentTarget.value); onMobileClose(); }}
+				class="w-full px-3 py-1.5 rounded-md text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 focus:outline-none focus:border-blue-500 cursor-pointer"
+			>
+				<option value="all">All Platforms</option>
+				{#each availablePlatforms as platform}
+					<option value={platform}>{platform}</option>
+				{/each}
+			</select>
+		</div>
+		{/if}
 
 		<!-- Priority filters -->
 		<div>
