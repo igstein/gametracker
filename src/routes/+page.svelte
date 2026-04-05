@@ -130,25 +130,27 @@
 			.sort((a, b) => new Date(b.last_played ?? '').getTime() - new Date(a.last_played ?? '').getTime())[0];
 		const recentGenres = recentGame?.genre ?? [];
 
-		const priorityMap: Record<string, number> = { must_play: 1.7, high: 1.3, medium: 1.0, low: 0.7 };
-
 		return candidates
 			.map((game) => {
 				const target = getTargetHours(game);
 				const rest = Math.max(0, target - game.played_hours);
-				const P = priorityMap[game.priority];
+				const progress = target > 0 ? Math.min(game.played_hours / target, 1) : 0;
+				const P = { must_play: 1.7, high: 1.3, medium: 1.0, low: 0.7 }[game.priority];
 				const restFactor = 1 / (rest + 1);
+				const progressFactor = 1 + progress * progress * 2;
+				const startedFactor = game.played_hours > 0 ? 1.8 : 1.0;
+				const shortGameFactor = target > 0 ? 1 + 1 / Math.log2(target + 2) : 1.0;
 				const daysSince = game.last_played ? (Date.now() - new Date(game.last_played).getTime()) / 86_400_000 : null;
 				const recencyFactor = daysSince !== null ? Math.exp(-daysSince / 7) : 0.5;
 				const genreFactor = recentGenres.length && game.genre?.length ? (game.genre.some((g) => recentGenres.includes(g)) ? 0.8 : 1.2) : 1.0;
 				const backlogDays = game.date_added ? (Date.now() - new Date(game.date_added).getTime()) / 86_400_000 : 0;
 				const ageFactor = 1 + Math.tanh(backlogDays / 365) * 0.5;
 				const statusFactor = game.status === 'playing' ? 1.5 : 1.0;
-				const moodGenreFactor = moodGenre ? (game.genre?.includes(moodGenre) ? 1.3 : 0.9) : 1.0;
-				const moodPlatformFactor = moodPlatform ? (game.platform?.includes(moodPlatform) ? 1.25 : 0.9) : 1.0;
+				const moodGenreFactor = moodGenre ? (game.genre?.includes(moodGenre) ? 2.0 : 0.6) : 1.0;
+				const moodPlatformFactor = moodPlatform ? (game.platform?.includes(moodPlatform) ? 1.8 : 0.65) : 1.0;
 				const moodFactor = moodGenreFactor * moodPlatformFactor;
-				const score = P * restFactor * recencyFactor * genreFactor * ageFactor * statusFactor * moodFactor;
-				return { game, score, debug: { P, restFactor, recencyFactor, genreFactor, ageFactor, statusFactor, moodFactor } };
+				const score = P * restFactor * progressFactor * startedFactor * shortGameFactor * recencyFactor * genreFactor * ageFactor * statusFactor * moodFactor;
+				return { game, score, debug: { P, restFactor, progressFactor, startedFactor, shortGameFactor, recencyFactor, genreFactor, ageFactor, statusFactor, moodFactor } };
 			})
 			.sort((a, b) => b.score - a.score)
 			.slice(0, 3);
@@ -494,6 +496,9 @@
 								<div class="flex justify-between"><span>score</span><span>{item.score.toFixed(4)}</span></div>
 								<div class="flex justify-between"><span>P</span><span>{item.debug.P.toFixed(2)}</span></div>
 								<div class="flex justify-between"><span>rest</span><span>{item.debug.restFactor.toFixed(3)}</span></div>
+								<div class="flex justify-between"><span>prog</span><span>{item.debug.progressFactor.toFixed(3)}</span></div>
+								<div class="flex justify-between"><span>started</span><span>{item.debug.startedFactor.toFixed(2)}</span></div>
+								<div class="flex justify-between"><span>short</span><span>{item.debug.shortGameFactor.toFixed(3)}</span></div>
 								<div class="flex justify-between"><span>recency</span><span>{item.debug.recencyFactor.toFixed(3)}</span></div>
 								<div class="flex justify-between"><span>genre</span><span>{item.debug.genreFactor.toFixed(2)}</span></div>
 								<div class="flex justify-between"><span>age</span><span>{item.debug.ageFactor.toFixed(3)}</span></div>
