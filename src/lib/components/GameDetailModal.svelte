@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import { isOnline } from '$lib/stores/network';
 	import type { Game, GameStatus, GamePriority, GameGenre, GameNote } from '$lib/types';
+	import GameGuide from './GameGuide.svelte';
 
 	const GENRES: GameGenre[] = [
 		'Action', 'Action RPG', 'Adventure', 'Card Game', 'Fighting', 'First Person Shooter',
@@ -800,6 +801,14 @@
 					</div>
 				{/if}
 			</form>
+
+			<!-- Guide Section -->
+			<GameGuide
+				gameId={game.id}
+				guideUrl={game.guide_url ?? null}
+				guideText={game.guide_text ?? null}
+				onUpdated={onGameUpdated}
+			/>
 
 			<!-- Journal Section -->
 			<div class="mt-8 pt-8 border-t border-gray-700">

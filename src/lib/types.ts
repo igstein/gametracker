@@ -40,6 +40,8 @@ export interface Game {
 	genre?: GameGenre[] | null;
 	platform?: string[] | null;
 	custom_target_hours?: number | null;
+	guide_url?: string | null;
+	guide_text?: string | null;
 }
 
 export interface GameNote {
