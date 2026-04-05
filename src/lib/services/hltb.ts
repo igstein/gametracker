@@ -12,9 +12,11 @@ function randomUserAgent(): string {
 	return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
-// Cache for discovered endpoint + auth token
+// Cache for discovered endpoint + auth token + fingerprint
 let cachedSearchPath: string | null = null;
 let cachedAuthToken: string | null = null;
+let cachedHpKey: string | null = null;
+let cachedHpVal: string | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -25,11 +27,13 @@ function isCacheValid(): boolean {
 function invalidateCache(): void {
 	cachedSearchPath = null;
 	cachedAuthToken = null;
+	cachedHpKey = null;
+	cachedHpVal = null;
 	cacheTimestamp = 0;
 }
 
 // Static fallback endpoint in case discovery fails
-const FALLBACK_SEARCH_PATH = '/api/finder';
+const FALLBACK_SEARCH_PATH = '/api/find';
 
 /**
  * Step 1: Fetch HLTB homepage, scan JS scripts, extract the search API path.
@@ -96,9 +100,9 @@ async function discoverSearchEndpoint(): Promise<string> {
 }
 
 /**
- * Step 2: Get auth token from the init endpoint.
+ * Step 2: Get auth token and fingerprint from the init endpoint.
  */
-async function getAuthToken(searchPath: string): Promise<string> {
+async function getAuthData(searchPath: string): Promise<{ token: string; hpKey: string; hpVal: string }> {
 	const timestamp = Date.now();
 	const initUrl = `https://howlongtobeat.com${searchPath}/init?t=${timestamp}`;
 
@@ -120,7 +124,7 @@ async function getAuthToken(searchPath: string): Promise<string> {
 		throw new Error('HLTB init endpoint did not return a valid token');
 	}
 
-	return data.token;
+	return { token: data.token, hpKey: data.hpKey ?? '', hpVal: data.hpVal ?? '' };
 }
 
 /**
@@ -129,9 +133,11 @@ async function getAuthToken(searchPath: string): Promise<string> {
 async function executeSearch(
 	searchPath: string,
 	authToken: string,
+	hpKey: string,
+	hpVal: string,
 	query: string
 ): Promise<any[]> {
-	const searchBody = {
+	const searchBody: Record<string, any> = {
 		searchType: 'games',
 		searchTerms: query.split(/\s+/),
 		searchPage: 1,
@@ -160,6 +166,11 @@ async function executeSearch(
 		useCache: true
 	};
 
+	// HLTB fingerprint: dynamic key in body + headers
+	if (hpKey) {
+		searchBody[hpKey] = hpVal;
+	}
+
 	const res = await fetch(`https://howlongtobeat.com${searchPath}`, {
 		method: 'POST',
 		headers: {
@@ -167,7 +178,9 @@ async function executeSearch(
 			'User-Agent': randomUserAgent(),
 			Referer: 'https://howlongtobeat.com/',
 			Origin: 'https://howlongtobeat.com',
-			'x-auth-token': authToken
+			'x-auth-token': authToken,
+			'x-hp-key': hpKey,
+			'x-hp-val': hpVal
 		},
 		body: JSON.stringify(searchBody)
 	});
@@ -248,19 +261,21 @@ function validateAndSanitizeResult(entry: any): HLTBSearchResult | null {
  * Ensures we have a valid cached search path and auth token.
  * Discovers them if needed or if cache is stale.
  */
-async function ensureEndpointAndToken(): Promise<{ searchPath: string; authToken: string }> {
+async function ensureEndpointAndToken(): Promise<{ searchPath: string; authToken: string; hpKey: string; hpVal: string }> {
 	if (isCacheValid()) {
-		return { searchPath: cachedSearchPath!, authToken: cachedAuthToken! };
+		return { searchPath: cachedSearchPath!, authToken: cachedAuthToken!, hpKey: cachedHpKey!, hpVal: cachedHpVal! };
 	}
 
 	const searchPath = await discoverSearchEndpoint();
-	const authToken = await getAuthToken(searchPath);
+	const { token, hpKey, hpVal } = await getAuthData(searchPath);
 
 	cachedSearchPath = searchPath;
-	cachedAuthToken = authToken;
+	cachedAuthToken = token;
+	cachedHpKey = hpKey;
+	cachedHpVal = hpVal;
 	cacheTimestamp = Date.now();
 
-	return { searchPath, authToken };
+	return { searchPath, authToken: token, hpKey, hpVal };
 }
 
 export async function searchGames(query: string): Promise<HLTBSearchResult[]> {
@@ -271,16 +286,16 @@ export async function searchGames(query: string): Promise<HLTBSearchResult[]> {
 			return [];
 		}
 
-		let { searchPath, authToken } = await ensureEndpointAndToken();
+		let { searchPath, authToken, hpKey, hpVal } = await ensureEndpointAndToken();
 
 		let rawResults: any[];
 		try {
-			rawResults = await executeSearch(searchPath, authToken, sanitizedQuery);
+			rawResults = await executeSearch(searchPath, authToken, hpKey, hpVal, sanitizedQuery);
 		} catch {
 			// If search fails, invalidate cache and retry once with fresh endpoint/token
 			invalidateCache();
-			({ searchPath, authToken } = await ensureEndpointAndToken());
-			rawResults = await executeSearch(searchPath, authToken, sanitizedQuery);
+			({ searchPath, authToken, hpKey, hpVal } = await ensureEndpointAndToken());
+			rawResults = await executeSearch(searchPath, authToken, hpKey, hpVal, sanitizedQuery);
 		}
 
 		const sanitizedResults = rawResults
