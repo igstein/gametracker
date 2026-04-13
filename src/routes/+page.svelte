@@ -3,6 +3,7 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import GameCard from '$lib/components/GameCard.svelte';
+	import WishlistCard from '$lib/components/WishlistCard.svelte';
 	import GameDetailModal from '$lib/components/GameDetailModal.svelte';
 	import type { Game } from '$lib/types';
 	import { getTargetHours, scoreGame } from '$lib/utils';
@@ -51,12 +52,21 @@
 		return Math.max(0, getTargetHours(game) - game.played_hours);
 	}
 
-	// Filtered and sorted games
+	// Whether the wishlist view is active
+	$: isWishlistView = $activeFilter === 'wishlist';
+
+	// Library games (exclude wishlist)
+	$: libraryGames = games.filter((g) => g.status !== 'wishlist');
+
+	// Wishlist games
+	$: wishlistGames = games.filter((g) => g.status === 'wishlist');
+
+	// Filtered and sorted games (library only, excludes wishlist)
 	$: filteredAndSortedGames = (() => {
 		// Filter by status
-		let filtered = games;
-		if ($activeFilter !== 'all') {
-			filtered = games.filter((game) => game.status === $activeFilter);
+		let filtered = libraryGames;
+		if ($activeFilter !== 'all' && $activeFilter !== 'wishlist') {
+			filtered = libraryGames.filter((game) => game.status === $activeFilter);
 		}
 
 		// Filter by priority
@@ -110,8 +120,49 @@
 		return sorted;
 	})();
 
-	// Unique platforms across all games (for quick-select in detail modal and sidebar filter)
-	$: availablePlatforms = [...new Set(games.flatMap((g) => g.platform ?? []))].sort();
+	// Filtered and sorted wishlist games
+	$: filteredAndSortedWishlist = (() => {
+		let filtered = wishlistGames;
+
+		// Filter by priority
+		if ($activePriorityFilter !== 'all') {
+			filtered = filtered.filter((game) => game.priority === $activePriorityFilter);
+		}
+
+		// Filter by platform
+		if ($activePlatformFilter !== 'all') {
+			filtered = filtered.filter((game) => game.platform?.includes($activePlatformFilter));
+		}
+
+		// Sort
+		const sorted = [...filtered];
+		switch ($sortBy) {
+			case 'name_asc':
+				sorted.sort((a, b) => a.title.localeCompare(b.title));
+				break;
+			case 'name_desc':
+				sorted.sort((a, b) => b.title.localeCompare(a.title));
+				break;
+			case 'priority':
+				const priorityOrder = { must_play: 0, high: 1, medium: 2, low: 3 };
+				sorted.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+				break;
+			case 'main_story_asc':
+				sorted.sort((a, b) => (a.main_story_hours ?? 999) - (b.main_story_hours ?? 999));
+				break;
+			case 'main_story_desc':
+				sorted.sort((a, b) => (b.main_story_hours ?? 0) - (a.main_story_hours ?? 0));
+				break;
+			case 'created_at_desc':
+			default:
+				break;
+		}
+
+		return sorted;
+	})();
+
+	// Unique platforms across library games (for quick-select in detail modal and sidebar filter)
+	$: availablePlatforms = [...new Set(libraryGames.flatMap((g) => g.platform ?? []))].sort();
 	$: availablePlatformsStore.set(availablePlatforms);
 
 	// Mood options derived from games that have data
@@ -120,7 +171,7 @@
 
 	// Next Up: Top 3 games scored by priority, recency, completion, genre diversity and age
 	$: nextUpGames = (() => {
-		const candidates = games.filter(
+		const candidates = libraryGames.filter(
 			(game) => game.status === 'playing' || game.status === 'backlog'
 		);
 
@@ -379,7 +430,7 @@
 		</div>
 	{/if}
 
-	{#if !loading && nextUpGames.length > 0}
+	{#if !loading && !isWishlistView && nextUpGames.length > 0}
 		<div class="mb-8">
 			<div class="flex items-center gap-2 mb-2 flex-wrap">
 				<h2 class="text-xl font-bold text-gray-900 dark:text-white">🎯 Next Up</h2>
@@ -513,62 +564,121 @@
 		</div>
 	{/if}
 
-	<div class="mb-8 flex flex-wrap gap-4 justify-between items-start">
-		<div>
-			<h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2 capitalize">{$activeFilter === 'all' ? 'All Games' : $activeFilter}</h2>
-			<p class="text-gray-600 dark:text-gray-400">Track your progress and finish what you started</p>
-		</div>
-		<div class="flex items-center gap-2">
-			<label for="sort-select" class="text-gray-600 dark:text-gray-400 text-sm">Sort by:</label>
-			<select
-				id="sort-select"
-				bind:value={$sortBy}
-				class="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
-			>
-				<option value="created_at_desc">Recently Added</option>
-				<option value="name_asc">Name (A-Z)</option>
-				<option value="name_desc">Name (Z-A)</option>
-				<option value="progress_asc">Progress (Low to High)</option>
-				<option value="progress_desc">Progress (High to Low)</option>
-				<option value="priority">Priority</option>
-				<option value="last_played">Last Played</option>
-				<option value="remaining_asc">Remaining Time (Low to High)</option>
-				<option value="remaining_desc">Remaining Time (High to Low)</option>
-			</select>
-		</div>
-	</div>
-
-	{#if error}
-		<div class="text-center py-20">
-			<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-lg p-6 max-w-lg mx-auto">
-				<p class="text-red-700 dark:text-red-400 font-medium mb-2">Error loading games</p>
-				<p class="text-red-600 dark:text-red-300 text-sm">{error}</p>
-				<button
-					on:click={loadGames}
-					class="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+	{#if isWishlistView}
+		<!-- Wishlist View -->
+		<div class="mb-8 flex flex-wrap gap-4 justify-between items-start">
+			<div>
+				<h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">💫 Wishlist</h2>
+				<p class="text-gray-600 dark:text-gray-400">Games you want to play in the future</p>
+			</div>
+			<div class="flex items-center gap-2">
+				<label for="sort-select" class="text-gray-600 dark:text-gray-400 text-sm">Sort by:</label>
+				<select
+					id="sort-select"
+					bind:value={$sortBy}
+					class="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
 				>
-					Retry
-				</button>
+					<option value="created_at_desc">Recently Added</option>
+					<option value="name_asc">Name (A-Z)</option>
+					<option value="name_desc">Name (Z-A)</option>
+					<option value="priority">Priority</option>
+					<option value="main_story_asc">Length (Short to Long)</option>
+					<option value="main_story_desc">Length (Long to Short)</option>
+				</select>
 			</div>
 		</div>
-	{:else if loading}
-		<div class="text-center py-20 text-gray-500 dark:text-gray-500">
-			<p class="text-lg">Loading games...</p>
-		</div>
-	{:else if filteredAndSortedGames.length > 0}
-		<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-[1800px]">
-			{#each filteredAndSortedGames as game (game.id)}
-				<GameCard {game} onClick={() => openGameDetail(game)} />
-			{/each}
-		</div>
-	{:else if games.length > 0}
-		<div class="text-center py-20 text-gray-500 dark:text-gray-500">
-			<p class="text-lg">No games match the current filter.</p>
-		</div>
+
+		{#if error}
+			<div class="text-center py-20">
+				<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-lg p-6 max-w-lg mx-auto">
+					<p class="text-red-700 dark:text-red-400 font-medium mb-2">Error loading games</p>
+					<p class="text-red-600 dark:text-red-300 text-sm">{error}</p>
+					<button
+						on:click={loadGames}
+						class="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+					>
+						Retry
+					</button>
+				</div>
+			</div>
+		{:else if loading}
+			<div class="text-center py-20 text-gray-500 dark:text-gray-500">
+				<p class="text-lg">Loading wishlist...</p>
+			</div>
+		{:else if filteredAndSortedWishlist.length > 0}
+			<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-[1800px]">
+				{#each filteredAndSortedWishlist as game (game.id)}
+					<WishlistCard {game} onClick={() => openGameDetail(game)} />
+				{/each}
+			</div>
+		{:else if wishlistGames.length > 0}
+			<div class="text-center py-20 text-gray-500 dark:text-gray-500">
+				<p class="text-lg">No wishlist games match the current filter.</p>
+			</div>
+		{:else}
+			<div class="text-center py-20 text-gray-500 dark:text-gray-500">
+				<p class="text-lg">Your wishlist is empty. Add games with "Add to Wishlist" to start planning!</p>
+			</div>
+		{/if}
 	{:else}
-		<div class="text-center py-20 text-gray-500 dark:text-gray-500">
-			<p class="text-lg">No games yet. Click "Add Game" to get started!</p>
+		<!-- Library View -->
+		<div class="mb-8 flex flex-wrap gap-4 justify-between items-start">
+			<div>
+				<h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2 capitalize">{$activeFilter === 'all' ? 'All Games' : $activeFilter}</h2>
+				<p class="text-gray-600 dark:text-gray-400">Track your progress and finish what you started</p>
+			</div>
+			<div class="flex items-center gap-2">
+				<label for="sort-select" class="text-gray-600 dark:text-gray-400 text-sm">Sort by:</label>
+				<select
+					id="sort-select"
+					bind:value={$sortBy}
+					class="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
+				>
+					<option value="created_at_desc">Recently Added</option>
+					<option value="name_asc">Name (A-Z)</option>
+					<option value="name_desc">Name (Z-A)</option>
+					<option value="progress_asc">Progress (Low to High)</option>
+					<option value="progress_desc">Progress (High to Low)</option>
+					<option value="priority">Priority</option>
+					<option value="last_played">Last Played</option>
+					<option value="remaining_asc">Remaining Time (Low to High)</option>
+					<option value="remaining_desc">Remaining Time (High to Low)</option>
+				</select>
+			</div>
 		</div>
+
+		{#if error}
+			<div class="text-center py-20">
+				<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-lg p-6 max-w-lg mx-auto">
+					<p class="text-red-700 dark:text-red-400 font-medium mb-2">Error loading games</p>
+					<p class="text-red-600 dark:text-red-300 text-sm">{error}</p>
+					<button
+						on:click={loadGames}
+						class="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+					>
+						Retry
+					</button>
+				</div>
+			</div>
+		{:else if loading}
+			<div class="text-center py-20 text-gray-500 dark:text-gray-500">
+				<p class="text-lg">Loading games...</p>
+			</div>
+		{:else if filteredAndSortedGames.length > 0}
+			<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-[1800px]">
+				{#each filteredAndSortedGames as game (game.id)}
+					<GameCard {game} onClick={() => openGameDetail(game)} />
+				{/each}
+			</div>
+		{:else if libraryGames.length > 0}
+			<div class="text-center py-20 text-gray-500 dark:text-gray-500">
+				<p class="text-lg">No games match the current filter.</p>
+			</div>
+		{:else}
+			<div class="text-center py-20 text-gray-500 dark:text-gray-500">
+				<p class="text-lg">No games yet. Click "Add Game" to get started!</p>
+			</div>
+		{/if}
 	{/if}
 </div>
 

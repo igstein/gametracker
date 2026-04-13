@@ -602,7 +602,8 @@
 				</div>
 			</div>
 
-			<!-- Progress Section -->
+			<!-- Progress Section (hidden for wishlist) -->
+			{#if game.status !== 'wishlist'}
 			<div class="bg-gray-700 rounded-lg p-4 mb-6">
 				<div class="flex justify-between text-sm text-gray-300 mb-2">
 					<span>Progress</span>
@@ -658,10 +659,33 @@
 					</div>
 				</div>
 			</div>
+			{/if}
+
+			<!-- HLTB Times (shown for wishlist) -->
+			{#if game.status === 'wishlist'}
+			<div class="bg-gray-700 rounded-lg p-4 mb-6">
+				<h4 class="text-sm font-medium text-gray-300 mb-3">HowLongToBeat</h4>
+				<div class="grid grid-cols-3 gap-3 text-center">
+					<div>
+						<p class="text-xs text-gray-400">Main Story</p>
+						<p class="text-white font-semibold">{game.main_story_hours ? Math.round(game.main_story_hours) + 'h' : '—'}</p>
+					</div>
+					<div>
+						<p class="text-xs text-gray-400">Main + Extras</p>
+						<p class="text-white font-semibold">{game.main_plus_extras_hours ? Math.round(game.main_plus_extras_hours) + 'h' : '—'}</p>
+					</div>
+					<div>
+						<p class="text-xs text-gray-400">Completionist</p>
+						<p class="text-white font-semibold">{game.completionist_hours ? Math.round(game.completionist_hours) + 'h' : '—'}</p>
+					</div>
+				</div>
+			</div>
+			{/if}
 
 			<!-- Update Form -->
 			<form on:submit|preventDefault={handleUpdate} class="space-y-4">
-				<!-- Add Playtime -->
+				<!-- Add Playtime (hidden for wishlist) -->
+				{#if status !== 'wishlist'}
 				<div>
 					<label class="block text-sm font-medium text-gray-300 mb-2">Adjust Playtime</label>
 					<div class="flex gap-2 mb-2">
@@ -711,6 +735,7 @@
 						{/if}
 					</p>
 				</div>
+				{/if}
 
 				<!-- Status -->
 				<div>
@@ -720,6 +745,7 @@
 						bind:value={status}
 						class="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
 					>
+						<option value="wishlist">💫 Wishlist</option>
 						<option value="backlog">Backlog</option>
 						<option value="playing">Playing</option>
 						<option value="finished">Finished</option>

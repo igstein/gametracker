@@ -21,7 +21,8 @@
 		{ id: 'playing', label: 'Playing', icon: '▶' },
 		{ id: 'backlog', label: 'Backlog', icon: '📋' },
 		{ id: 'finished', label: 'Finished', icon: '✅' },
-		{ id: 'abandoned', label: 'Abandoned', icon: '❌' }
+		{ id: 'abandoned', label: 'Abandoned', icon: '❌' },
+		{ id: 'wishlist', label: 'Wishlist', icon: '💫' }
 	];
 
 	const priorityFilters = [

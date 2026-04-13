@@ -1,4 +1,4 @@
-export type GameStatus = 'playing' | 'backlog' | 'finished' | 'abandoned';
+export type GameStatus = 'playing' | 'backlog' | 'finished' | 'abandoned' | 'wishlist';
 export type GamePriority = 'must_play' | 'high' | 'medium' | 'low';
 export type GameGenre =
 	| 'Action'

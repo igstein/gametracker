@@ -113,7 +113,7 @@
 		}, 500);
 	}
 
-	async function addGameFromHLTB(result: HLTBSearchResult) {
+	async function addGameFromHLTB(result: HLTBSearchResult, toWishlist = false) {
 		saving = true;
 		error = '';
 
@@ -133,7 +133,7 @@
 				main_story_hours: result.mainStoryHours,
 				main_plus_extras_hours: result.mainPlusExtrasHours,
 				completionist_hours: result.completionistHours,
-				status: 'backlog',
+				status: toWishlist ? 'wishlist' : 'backlog',
 				priority: 'medium'
 			});
 
@@ -285,14 +285,24 @@
 										<p>Target: ~{result.targetHours}h</p>
 									</div>
 								</div>
-								<button
-									type="button"
-									on:click={() => addGameFromHLTB(result)}
-									disabled={saving}
-									class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 self-center"
-								>
-									{saving ? 'Adding...' : 'Add'}
-								</button>
+								<div class="flex flex-col gap-1.5 self-center">
+									<button
+										type="button"
+										on:click={() => addGameFromHLTB(result)}
+										disabled={saving}
+										class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 text-sm"
+									>
+										{saving ? 'Adding...' : 'Add'}
+									</button>
+									<button
+										type="button"
+										on:click={() => addGameFromHLTB(result, true)}
+										disabled={saving}
+										class="px-4 py-1.5 bg-purple-600/80 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 text-xs"
+									>
+										💫 Wishlist
+									</button>
+								</div>
 							</div>
 						{/each}
 					</div>
@@ -460,6 +470,7 @@
 							<option value="playing">Playing</option>
 							<option value="finished">Finished</option>
 							<option value="abandoned">Abandoned</option>
+							<option value="wishlist">💫 Wishlist</option>
 						</select>
 					</div>
 

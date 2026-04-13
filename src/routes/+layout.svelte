@@ -127,8 +127,8 @@
 			return;
 		}
 
-		if (['1', '2', '3', '4', '5'].includes(event.key)) {
-			const filters = ['all', 'playing', 'backlog', 'finished', 'abandoned'];
+		if (['1', '2', '3', '4', '5', '6'].includes(event.key)) {
+			const filters = ['all', 'playing', 'backlog', 'finished', 'abandoned', 'wishlist'];
 			const index = parseInt(event.key) - 1;
 			if (index >= 0 && index < filters.length && $page.data.user) {
 				activeFilter.set(filters[index]);
