@@ -664,7 +664,12 @@
 			<!-- HLTB Times (shown for wishlist) -->
 			{#if game.status === 'wishlist'}
 			<div class="bg-gray-700 rounded-lg p-4 mb-6">
-				<h4 class="text-sm font-medium text-gray-300 mb-3">HowLongToBeat</h4>
+				<div class="flex justify-between items-center mb-3">
+					<h4 class="text-sm font-medium text-gray-300">HowLongToBeat</h4>
+					{#if targetHours > 0}
+						<span class="text-white font-semibold text-sm">Target: {Math.round(targetHours)}h</span>
+					{/if}
+				</div>
 				<div class="grid grid-cols-3 gap-3 text-center">
 					<div>
 						<p class="text-xs text-gray-400">Main Story</p>

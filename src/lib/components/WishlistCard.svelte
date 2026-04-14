@@ -1,8 +1,11 @@
 <script lang="ts">
 	import type { Game } from '$lib/types';
+	import { getTargetHours } from '$lib/utils';
 
 	export let game: Game;
 	export let onClick: () => void;
+
+	const targetHours = getTargetHours(game);
 
 	const priorityConfig = {
 		must_play: { icon: '★', color: 'text-yellow-400', label: 'Must Play' },
@@ -55,6 +58,12 @@
 
 		<!-- HLTB Times -->
 		<div class="text-[10px] text-gray-500 dark:text-gray-400 space-y-0.5">
+			{#if targetHours > 0}
+				<div class="flex justify-between font-medium">
+					<span>Target</span>
+					<span class="text-gray-300">{Math.round(targetHours)}h</span>
+				</div>
+			{/if}
 			{#if mainHours}
 				<div class="flex justify-between">
 					<span>Main</span>
