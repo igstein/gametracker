@@ -292,8 +292,10 @@ export async function searchGames(query: string): Promise<HLTBSearchResult[]> {
 		try {
 			rawResults = await executeSearch(searchPath, authToken, hpKey, hpVal, sanitizedQuery);
 		} catch {
-			// If search fails, invalidate cache and retry once with fresh endpoint/token
+			// If search fails, invalidate cache and retry once with a fresh endpoint/token.
+			// A short delay helps avoid immediate re-rejection from HLTB rate limiting.
 			invalidateCache();
+			await new Promise((resolve) => setTimeout(resolve, 800));
 			({ searchPath, authToken, hpKey, hpVal } = await ensureEndpointAndToken());
 			rawResults = await executeSearch(searchPath, authToken, hpKey, hpVal, sanitizedQuery);
 		}
