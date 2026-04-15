@@ -42,6 +42,8 @@ export interface Game {
 	custom_target_hours?: number | null;
 	guide_url?: string | null;
 	guide_text?: string | null;
+	devices?: string[] | null;
+	setting?: string[] | null;
 }
 
 export interface GameNote {

@@ -29,7 +29,8 @@
 	let realtimeConnected = false;
 	let showDebug = false;
 	let moodGenre: string | null = null;
-	let moodPlatform: string | null = null;
+	let moodDevice: string | null = null;
+	let moodSetting: string | null = null;
 	let showMoodPicker = false;
 
 	$: supabase = $page.data.supabase;
@@ -163,11 +164,18 @@
 
 	// Unique platforms across library games (for quick-select in detail modal and sidebar filter)
 	$: availablePlatforms = [...new Set(libraryGames.flatMap((g) => g.platform ?? []))].sort();
+
+	// Unique devices across all games (for quick-select in detail modal)
+	$: availableDevices = [...new Set(games.flatMap((g) => g.devices ?? []))].sort();
 	$: availablePlatformsStore.set(availablePlatforms);
+
+	// Unique settings across all games
+	$: availableSettings = [...new Set(games.flatMap((g) => g.setting ?? []))].sort();
 
 	// Mood options derived from games that have data
 	$: moodGenreOptions = [...new Set(games.flatMap((g) => g.genre ?? []))].sort();
-	$: moodPlatformOptions = availablePlatforms;
+	$: moodDeviceOptions = availableDevices;
+	$: moodSettingOptions = availableSettings;
 
 	// Next Up: Top 3 games scored by priority, recency, completion, genre diversity and age
 	$: nextUpGames = (() => {
@@ -198,8 +206,9 @@
 				const ageFactor = 1 + Math.tanh(backlogDays / 365) * 0.5;
 				const statusFactor = game.status === 'playing' ? 1.5 : 1.0;
 				const moodGenreFactor = moodGenre ? (game.genre?.includes(moodGenre) ? 2.0 : 0.6) : 1.0;
-				const moodPlatformFactor = moodPlatform ? (game.platform?.includes(moodPlatform) ? 1.8 : 0.65) : 1.0;
-				const moodFactor = moodGenreFactor * moodPlatformFactor;
+				const moodDeviceFactor = moodDevice ? (game.devices?.includes(moodDevice) ? 1.8 : 0.65) : 1.0;
+				const moodSettingFactor = moodSetting ? (game.setting?.includes(moodSetting) ? 1.8 : 0.65) : 1.0;
+				const moodFactor = moodGenreFactor * moodDeviceFactor * moodSettingFactor;
 				const score = P * restFactor * progressFactor * startedFactor * shortGameFactor * recencyFactor * genreFactor * ageFactor * statusFactor * moodFactor;
 				return { game, score, debug: { P, restFactor, progressFactor, startedFactor, shortGameFactor, recencyFactor, genreFactor, ageFactor, statusFactor, moodFactor } };
 			})
@@ -373,7 +382,8 @@
 				return;
 			}
 			moodGenre = data.genre ?? null;
-			moodPlatform = data.platform ?? null;
+			moodDevice = data.device ?? null;
+			moodSetting = data.setting ?? null;
 		} catch {
 			localStorage.removeItem('gametracker_mood');
 		}
@@ -381,12 +391,13 @@
 
 	function saveMood() {
 		if (!browser) return;
-		if (!moodGenre && !moodPlatform) {
+		if (!moodGenre && !moodDevice && !moodSetting) {
 			localStorage.removeItem('gametracker_mood');
 		} else {
 			localStorage.setItem('gametracker_mood', JSON.stringify({
 				genre: moodGenre,
-				platform: moodPlatform,
+				device: moodDevice,
+				setting: moodSetting,
 				setAt: new Date().toISOString()
 			}));
 		}
@@ -440,10 +451,16 @@
 						<button on:click={() => { moodGenre = null; saveMood(); }} class="text-purple-400 hover:text-white leading-none">×</button>
 					</span>
 				{/if}
-				{#if moodPlatform}
+				{#if moodDevice}
 					<span class="flex items-center gap-1 px-2 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded-full">
-						{moodPlatform}
-						<button on:click={() => { moodPlatform = null; saveMood(); }} class="text-purple-400 hover:text-white leading-none">×</button>
+						{moodDevice}
+						<button on:click={() => { moodDevice = null; saveMood(); }} class="text-purple-400 hover:text-white leading-none">×</button>
+					</span>
+				{/if}
+				{#if moodSetting}
+					<span class="flex items-center gap-1 px-2 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded-full">
+						{moodSetting}
+						<button on:click={() => { moodSetting = null; saveMood(); }} class="text-purple-400 hover:text-white leading-none">×</button>
 					</span>
 				{/if}
 				<button
@@ -474,21 +491,34 @@
 							</div>
 						</div>
 					{/if}
-					{#if moodPlatformOptions.length > 0}
-						<div>
-							<p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Platform</p>
+					{#if moodSettingOptions.length > 0}
+						<div class="mb-2">
+							<p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Setting</p>
 							<div class="flex flex-wrap gap-1.5">
-								{#each moodPlatformOptions as p}
+								{#each moodSettingOptions as s}
 									<button
-										on:click={() => { moodPlatform = moodPlatform === p ? null : p; saveMood(); }}
-										class="px-2 py-0.5 text-xs rounded-full transition-colors {moodPlatform === p ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
-									>{p}</button>
+										on:click={() => { moodSetting = moodSetting === s ? null : s; saveMood(); }}
+										class="px-2 py-0.5 text-xs rounded-full transition-colors {moodSetting === s ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
+									>{s}</button>
 								{/each}
 							</div>
 						</div>
 					{/if}
-					{#if moodGenreOptions.length === 0 && moodPlatformOptions.length === 0}
-						<p class="text-xs text-gray-500">Add genres and platforms to your games first.</p>
+					{#if moodDeviceOptions.length > 0}
+						<div>
+							<p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Device</p>
+							<div class="flex flex-wrap gap-1.5">
+								{#each moodDeviceOptions as d}
+									<button
+										on:click={() => { moodDevice = moodDevice === d ? null : d; saveMood(); }}
+										class="px-2 py-0.5 text-xs rounded-full transition-colors {moodDevice === d ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
+									>{d}</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
+					{#if moodGenreOptions.length === 0 && moodSettingOptions.length === 0 && moodDeviceOptions.length === 0}
+						<p class="text-xs text-gray-500">Add genres, settings, and devices to your games first.</p>
 					{/if}
 				</div>
 			{/if}
@@ -689,4 +719,6 @@
 	onGameUpdated={handleGameUpdated}
 	onGameDeleted={handleGameUpdated}
 	{availablePlatforms}
+	{availableDevices}
+	{availableSettings}
 />

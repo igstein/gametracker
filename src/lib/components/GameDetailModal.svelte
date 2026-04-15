@@ -27,6 +27,8 @@
 	export let onGameUpdated: () => void;
 	export let onGameDeleted: () => void = () => {};
 	export let availablePlatforms: string[] = [];
+	export let availableDevices: string[] = [];
+	export let availableSettings: string[] = [];
 
 	$: supabase = $page.data.supabase;
 
@@ -42,9 +44,16 @@
 	let customTargetInput = 0;
 	let editingGenres = false;
 	let selectedGenres: GameGenre[] = [];
-	let editingPlatforms = false;
-	let selectedPlatforms: string[] = [];
+	let addingPlatform = false;
 	let newPlatformInput = '';
+
+	// Devices state
+	let addingDevice = false;
+	let newDeviceInput = '';
+
+	// Setting state
+	let addingSetting = false;
+	let newSettingInput = '';
 
 	// Journal state
 	let notes: GameNote[] = [];
@@ -72,9 +81,12 @@
 		customTargetInput = 0;
 		editingGenres = false;
 		selectedGenres = [...(game.genre ?? [])];
-		editingPlatforms = false;
-		selectedPlatforms = [...(game.platform ?? [])];
+		addingPlatform = false;
 		newPlatformInput = '';
+		addingDevice = false;
+		newDeviceInput = '';
+		addingSetting = false;
+		newSettingInput = '';
 		loadNotes();
 		setupNotesRealtimeSubscription();
 	}
@@ -446,19 +458,17 @@
 		}
 	}
 
-	async function savePlatforms() {
+	async function savePlatforms(platforms: string[]) {
 		if (!game) return;
 		saving = true;
 		error = '';
 		try {
 			const { error: updateError } = await supabase
 				.from('games')
-				.update({ platform: selectedPlatforms.length ? selectedPlatforms : null })
+				.update({ platform: platforms.length ? platforms : null })
 				.eq('id', game.id);
 			if (updateError) throw updateError;
-			game = { ...game, platform: selectedPlatforms.length ? selectedPlatforms : null };
-			editingPlatforms = false;
-			newPlatformInput = '';
+			game = { ...game, platform: platforms.length ? platforms : null };
 			onGameUpdated();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to save platforms';
@@ -467,12 +477,96 @@
 		}
 	}
 
-	function addNewPlatform() {
+	async function deletePlatform(p: string) {
+		if (!game) return;
+		const updated = (game.platform ?? []).filter((x) => x !== p);
+		await savePlatforms(updated);
+	}
+
+	async function addPlatform() {
+		if (!game) return;
 		const trimmed = newPlatformInput.trim();
-		if (trimmed && !selectedPlatforms.includes(trimmed)) {
-			selectedPlatforms = [...selectedPlatforms, trimmed];
+		if (!trimmed) return;
+		const current = game.platform ?? [];
+		if (!current.includes(trimmed)) {
+			await savePlatforms([...current, trimmed]);
 		}
 		newPlatformInput = '';
+		addingPlatform = false;
+	}
+
+	async function saveDevices(devices: string[]) {
+		if (!game) return;
+		saving = true;
+		error = '';
+		try {
+			const { error: updateError } = await supabase
+				.from('games')
+				.update({ devices: devices.length ? devices : null })
+				.eq('id', game.id);
+			if (updateError) throw updateError;
+			game = { ...game, devices: devices.length ? devices : null };
+			onGameUpdated();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to save devices';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function saveSettings(settings: string[]) {
+		if (!game) return;
+		saving = true;
+		error = '';
+		try {
+			const { error: updateError } = await supabase
+				.from('games')
+				.update({ setting: settings.length ? settings : null })
+				.eq('id', game.id);
+			if (updateError) throw updateError;
+			game = { ...game, setting: settings.length ? settings : null };
+			onGameUpdated();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to save settings';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function deleteSetting(s: string) {
+		if (!game) return;
+		const updated = (game.setting ?? []).filter((x) => x !== s);
+		await saveSettings(updated);
+	}
+
+	async function addSetting() {
+		if (!game) return;
+		const trimmed = newSettingInput.trim();
+		if (!trimmed) return;
+		const current = game.setting ?? [];
+		if (!current.includes(trimmed)) {
+			await saveSettings([...current, trimmed]);
+		}
+		newSettingInput = '';
+		addingSetting = false;
+	}
+
+	async function deleteDevice(d: string) {
+		if (!game) return;
+		const updated = (game.devices ?? []).filter((x) => x !== d);
+		await saveDevices(updated);
+	}
+
+	async function addDevice() {
+		if (!game) return;
+		const trimmed = newDeviceInput.trim();
+		if (!trimmed) return;
+		const current = game.devices ?? [];
+		if (!current.includes(trimmed)) {
+			await saveDevices([...current, trimmed]);
+		}
+		newDeviceInput = '';
+		addingDevice = false;
 	}
 
 	function formatDate(dateString: string): string {
@@ -544,57 +638,98 @@
 					</div>
 					<!-- Platform -->
 					<div class="mt-2">
-						{#if !editingPlatforms}
-							<div class="flex flex-wrap gap-1.5 items-center">
-								{#if game.platform?.length}
-									{#each game.platform as p}
-										<span class="px-2 py-0.5 bg-indigo-900/50 text-indigo-300 text-xs rounded-full">{p}</span>
-									{/each}
-								{:else}
-									<span class="text-gray-500 text-xs">No platforms set</span>
-								{/if}
-								<button
-									type="button"
-									on:click={() => { selectedPlatforms = [...(game?.platform ?? [])]; editingPlatforms = true; }}
-									class="text-gray-500 hover:text-gray-300 text-xs ml-1"
-								>Edit</button>
-							</div>
-						{:else}
-							<div class="bg-gray-700 rounded-lg p-3 mt-1">
-								{#if availablePlatforms.length > 0}
-									<div class="flex flex-wrap gap-2 mb-3">
-										{#each availablePlatforms as p}
-											<button
-												type="button"
-												on:click={() => selectedPlatforms = selectedPlatforms.includes(p) ? selectedPlatforms.filter(x => x !== p) : [...selectedPlatforms, p]}
-												class="px-2 py-0.5 text-xs rounded-full transition-colors {selectedPlatforms.includes(p) ? 'bg-indigo-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}"
-											>{p}</button>
-										{/each}
-									</div>
-								{/if}
-								<div class="flex gap-2 mb-3">
-									<input
-										type="text"
-										bind:value={newPlatformInput}
-										placeholder="Add platform (e.g. PC, PS5)"
-										on:keydown={(e) => e.key === 'Enter' && (e.preventDefault(), addNewPlatform())}
-										class="flex-1 px-3 py-1 bg-gray-600 text-white text-xs rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-									/>
-									<button type="button" on:click={addNewPlatform} class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-lg transition-colors">Add</button>
-								</div>
-								{#if selectedPlatforms.length > 0}
-									<div class="flex flex-wrap gap-1.5 mb-3">
-										{#each selectedPlatforms as p}
-											<span class="flex items-center gap-1 px-2 py-0.5 bg-indigo-900/50 text-indigo-300 text-xs rounded-full">
-												{p}
-												<button type="button" on:click={() => selectedPlatforms = selectedPlatforms.filter(x => x !== p)} class="text-indigo-400 hover:text-white leading-none">×</button>
-											</span>
+						<div class="flex flex-wrap gap-1.5 items-center">
+							{#if game.platform?.length}
+								{#each game.platform as p}
+									<span class="flex items-center gap-1 px-2 py-0.5 bg-indigo-900/50 text-indigo-300 text-xs rounded-full">
+										{p}
+										<button type="button" on:click={() => deletePlatform(p)} disabled={saving} class="text-indigo-400 hover:text-white leading-none disabled:opacity-50">×</button>
+									</span>
+								{/each}
+							{/if}
+							{#if !addingPlatform}
+								<button type="button" on:click={() => (addingPlatform = true)} class="text-gray-500 hover:text-gray-300 text-xs">+ platform</button>
+							{/if}
+						</div>
+						{#if addingPlatform}
+							<div class="mt-2 bg-gray-700 rounded-lg p-2.5">
+								{#if availablePlatforms.filter(p => !(game?.platform ?? []).includes(p)).length > 0}
+									<div class="flex flex-wrap gap-1.5 mb-2">
+										{#each availablePlatforms.filter(p => !(game?.platform ?? []).includes(p)) as p}
+											<button type="button" on:click={() => { newPlatformInput = p; addPlatform(); }} class="px-2 py-0.5 text-xs rounded-full bg-gray-600 text-gray-300 hover:bg-indigo-600 hover:text-white transition-colors">{p}</button>
 										{/each}
 									</div>
 								{/if}
 								<div class="flex gap-2">
-									<button type="button" on:click={() => { editingPlatforms = false; newPlatformInput = ''; }} class="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded-lg transition-colors">Cancel</button>
-									<button type="button" on:click={savePlatforms} disabled={saving} class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50">Save</button>
+									<input type="text" bind:value={newPlatformInput} placeholder="e.g. SNES, PS5, PC" on:keydown={(e) => e.key === 'Enter' && (e.preventDefault(), addPlatform())} class="flex-1 px-2 py-1 bg-gray-600 text-white text-xs rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" />
+									<button type="button" on:click={addPlatform} disabled={saving || !newPlatformInput.trim()} class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50">Add</button>
+									<button type="button" on:click={() => { addingPlatform = false; newPlatformInput = ''; }} class="px-2.5 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded-lg transition-colors">✕</button>
+								</div>
+							</div>
+						{/if}
+					</div>
+
+					<!-- Devices -->
+					<div class="mt-2">
+						<div class="flex flex-wrap gap-1.5 items-center">
+							{#if game.devices?.length}
+								{#each game.devices as d}
+									<span class="flex items-center gap-1 px-2 py-0.5 bg-teal-900/50 text-teal-300 text-xs rounded-full">
+										{d}
+										<button type="button" on:click={() => deleteDevice(d)} disabled={saving} class="text-teal-400 hover:text-white leading-none disabled:opacity-50">×</button>
+									</span>
+								{/each}
+							{/if}
+							{#if !addingDevice}
+								<button type="button" on:click={() => (addingDevice = true)} class="text-gray-500 hover:text-gray-300 text-xs">+ device</button>
+							{/if}
+						</div>
+						{#if addingDevice}
+							<div class="mt-2 bg-gray-700 rounded-lg p-2.5">
+								{#if availableDevices.filter(d => !(game?.devices ?? []).includes(d)).length > 0}
+									<div class="flex flex-wrap gap-1.5 mb-2">
+										{#each availableDevices.filter(d => !(game?.devices ?? []).includes(d)) as d}
+											<button type="button" on:click={() => { newDeviceInput = d; addDevice(); }} class="px-2 py-0.5 text-xs rounded-full bg-gray-600 text-gray-300 hover:bg-teal-600 hover:text-white transition-colors">{d}</button>
+										{/each}
+									</div>
+								{/if}
+								<div class="flex gap-2">
+									<input type="text" bind:value={newDeviceInput} placeholder="e.g. Odin2, Steam Deck" on:keydown={(e) => e.key === 'Enter' && (e.preventDefault(), addDevice())} class="flex-1 px-2 py-1 bg-gray-600 text-white text-xs rounded-lg focus:ring-2 focus:ring-teal-500 outline-none" />
+									<button type="button" on:click={addDevice} disabled={saving || !newDeviceInput.trim()} class="px-2.5 py-1 bg-teal-600 hover:bg-teal-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50">Add</button>
+									<button type="button" on:click={() => { addingDevice = false; newDeviceInput = ''; }} class="px-2.5 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded-lg transition-colors">✕</button>
+								</div>
+							</div>
+						{/if}
+					</div>
+
+					<!-- Setting -->
+					<div class="mt-2">
+						<div class="flex flex-wrap gap-1.5 items-center">
+							{#if game.setting?.length}
+								{#each game.setting as s}
+									<span class="flex items-center gap-1 px-2 py-0.5 bg-amber-900/50 text-amber-300 text-xs rounded-full">
+										{s}
+										<button type="button" on:click={() => deleteSetting(s)} disabled={saving} class="text-amber-400 hover:text-white leading-none disabled:opacity-50">×</button>
+									</span>
+								{/each}
+							{/if}
+							{#if !addingSetting}
+								<button type="button" on:click={() => (addingSetting = true)} class="text-gray-500 hover:text-gray-300 text-xs">+ setting</button>
+							{/if}
+						</div>
+						{#if addingSetting}
+							<div class="mt-2 bg-gray-700 rounded-lg p-2.5">
+								{#if availableSettings.filter(s => !(game?.setting ?? []).includes(s)).length > 0}
+									<div class="flex flex-wrap gap-1.5 mb-2">
+										{#each availableSettings.filter(s => !(game?.setting ?? []).includes(s)) as s}
+											<button type="button" on:click={() => { newSettingInput = s; addSetting(); }} class="px-2 py-0.5 text-xs rounded-full bg-gray-600 text-gray-300 hover:bg-amber-600 hover:text-white transition-colors">{s}</button>
+										{/each}
+									</div>
+								{/if}
+								<div class="flex gap-2">
+									<input type="text" bind:value={newSettingInput} placeholder="e.g. Fantasy, Sci-Fi, Warhammer 40K" on:keydown={(e) => e.key === 'Enter' && (e.preventDefault(), addSetting())} class="flex-1 px-2 py-1 bg-gray-600 text-white text-xs rounded-lg focus:ring-2 focus:ring-amber-500 outline-none" />
+									<button type="button" on:click={addSetting} disabled={saving || !newSettingInput.trim()} class="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs rounded-lg transition-colors disabled:opacity-50">Add</button>
+									<button type="button" on:click={() => { addingSetting = false; newSettingInput = ''; }} class="px-2.5 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded-lg transition-colors">✕</button>
 								</div>
 							</div>
 						{/if}
