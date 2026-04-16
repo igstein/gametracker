@@ -5,6 +5,7 @@
 	import GameCard from '$lib/components/GameCard.svelte';
 	import WishlistCard from '$lib/components/WishlistCard.svelte';
 	import GameDetailModal from '$lib/components/GameDetailModal.svelte';
+	import FocusSection from '$lib/components/FocusSection.svelte';
 	import type { Game } from '$lib/types';
 	import { getTargetHours, scoreGame } from '$lib/utils';
 	import type { Writable } from 'svelte/store';
@@ -28,6 +29,7 @@
 	let realtimeChannel: RealtimeChannel | null = null;
 	let realtimeConnected = false;
 	let showDebug = false;
+	let nextUpOpen = false;
 	let moodGenre: string | null = null;
 	let moodDevice: string | null = null;
 	let moodSetting: string | null = null;
@@ -368,6 +370,16 @@
 			});
 	}
 
+	function loadNextUpOpen() {
+		if (!browser) return;
+		nextUpOpen = localStorage.getItem('gametracker_nextup_open') === 'true';
+	}
+
+	function toggleNextUp() {
+		nextUpOpen = !nextUpOpen;
+		if (browser) localStorage.setItem('gametracker_nextup_open', String(nextUpOpen));
+	}
+
 	function loadMood() {
 		if (!browser) return;
 		const stored = localStorage.getItem('gametracker_mood');
@@ -407,6 +419,7 @@
 		// Initialize IndexedDB
 		await initDB();
 
+		loadNextUpOpen();
 		loadMood();
 		loadGames();
 		setupRealtimeSubscription();
@@ -441,10 +454,20 @@
 		</div>
 	{/if}
 
+	{#if !loading && !isWishlistView}
+		<FocusSection {games} onOpenGame={openGameDetail} />
+	{/if}
+
 	{#if !loading && !isWishlistView && nextUpGames.length > 0}
 		<div class="mb-8">
 			<div class="flex items-center gap-2 mb-2 flex-wrap">
-				<h2 class="text-xl font-bold text-gray-900 dark:text-white">🎯 Next Up</h2>
+				<button
+					on:click={toggleNextUp}
+					class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+				>
+					Next Up <span class="text-base">{nextUpOpen ? '▾' : '▸'}</span>
+				</button>
+				{#if nextUpOpen}
 				{#if moodGenre}
 					<span class="flex items-center gap-1 px-2 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded-full">
 						{moodGenre}
@@ -475,7 +498,9 @@
 				>
 					{showDebug ? 'debug: on' : 'debug'}
 				</button>
+			{/if}
 			</div>
+			{#if nextUpOpen}
 			{#if showMoodPicker}
 				<div class="bg-gray-100 dark:bg-gray-800/80 rounded-lg p-3 mb-3 border border-gray-200 dark:border-gray-700">
 					{#if moodGenreOptions.length > 0}
@@ -591,6 +616,7 @@
 					</div>
 				{/each}
 			</div>
+			{/if}
 		</div>
 	{/if}
 
@@ -721,4 +747,5 @@
 	{availablePlatforms}
 	{availableDevices}
 	{availableSettings}
+	playingGames={libraryGames.filter((g) => g.status === 'playing')}
 />

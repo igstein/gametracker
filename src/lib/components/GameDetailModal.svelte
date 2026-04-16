@@ -29,6 +29,7 @@
 	export let availablePlatforms: string[] = [];
 	export let availableDevices: string[] = [];
 	export let availableSettings: string[] = [];
+	export let playingGames: import('$lib/types').Game[] = [];
 
 	$: supabase = $page.data.supabase;
 
@@ -40,6 +41,7 @@
 	let saving = false;
 	let error = '';
 	let confirmingDelete = false;
+	let showFocusWarning = false;
 	let editingTarget = false;
 	let customTargetInput = 0;
 	let editingGenres = false;
@@ -77,6 +79,7 @@
 		noteContent = '';
 		editingNoteId = null;
 		confirmingDelete = false;
+		showFocusWarning = false;
 		editingTarget = false;
 		customTargetInput = 0;
 		editingGenres = false;
@@ -114,9 +117,22 @@
 		low: { icon: '○', label: 'Low' }
 	};
 
-	async function handleUpdate() {
-		if (!game) return;
+	// Other playing games (excluding the current one)
+	$: otherPlayingGames = playingGames.filter((g) => g.id !== game?.id);
 
+	function handleUpdate() {
+		if (!game) return;
+		// Soft lock: warn if switching to Playing while other games are already Playing
+		if (status === 'playing' && game.status !== 'playing' && otherPlayingGames.length > 0) {
+			showFocusWarning = true;
+			return;
+		}
+		handleUpdateConfirmed();
+	}
+
+	async function handleUpdateConfirmed() {
+		if (!game) return;
+		showFocusWarning = false;
 		saving = true;
 		error = '';
 
@@ -912,6 +928,35 @@
 					<div class="text-red-500 text-sm">{error}</div>
 				{/if}
 
+				<!-- Focus warning -->
+				{#if showFocusWarning}
+					<div class="p-4 bg-yellow-900/30 border border-yellow-700 rounded-lg">
+						<p class="text-yellow-300 text-sm font-medium mb-1">You're already playing:</p>
+						<ul class="mb-3 space-y-0.5">
+							{#each otherPlayingGames as g}
+								<li class="text-yellow-200 text-sm">• {g.title}</li>
+							{/each}
+						</ul>
+						<p class="text-yellow-400 text-xs mb-3">Focusing on one game at a time helps you finish it. Are you sure?</p>
+						<div class="flex gap-2">
+							<button
+								type="button"
+								on:click={() => (showFocusWarning = false)}
+								class="flex-1 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								on:click={handleUpdateConfirmed}
+								disabled={saving}
+								class="flex-1 px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+							>
+								Play anyway
+							</button>
+						</div>
+					</div>
+				{:else}
 				<!-- Buttons -->
 				<div class="flex gap-3 pt-4">
 					<button
@@ -930,6 +975,7 @@
 						{saving ? 'Updating...' : 'Update Game'}
 					</button>
 				</div>
+				{/if}
 
 				<!-- Delete -->
 				{#if !confirmingDelete}
