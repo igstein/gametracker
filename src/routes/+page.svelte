@@ -11,6 +11,7 @@
 	import type { Writable } from 'svelte/store';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import { isOnline } from '$lib/stores/network';
+	import { allGames } from '$lib/stores/games';
 	import {
 		initDB,
 		saveGamesToLocal,
@@ -54,6 +55,9 @@
 	function getRemainingHours(game: Game): number {
 		return Math.max(0, getTargetHours(game) - game.played_hours);
 	}
+
+	// Sync games into shared store so AddGameModal can check duplicates
+	$: allGames.set(games);
 
 	// Whether the wishlist view is active
 	$: isWishlistView = $activeFilter === 'wishlist';

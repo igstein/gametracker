@@ -1,11 +1,21 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import type { GameStatus, GamePriority, HLTBSearchResult } from '$lib/types';
-
+	import type { Game, GameStatus, GamePriority, HLTBSearchResult } from '$lib/types';
 
 	export let open = false;
 	export let onClose: () => void;
 	export let onGameAdded: () => void;
+	export let games: Game[] = [];
+
+	const statusLabel: Record<string, string> = {
+		playing: '▶ Playing',
+		backlog: '📋 Backlog',
+		finished: '✅ Finished',
+		abandoned: '❌ Abandoned',
+		wishlist: '💫 Wishlist'
+	};
+
+	$: existingByHltbId = new Map(games.filter((g) => g.hltb_id != null).map((g) => [g.hltb_id!, g]));
 
 	let searchQuery = '';
 	let searchResults: HLTBSearchResult[] = [];
@@ -263,45 +273,55 @@
 					<div class="space-y-3 mb-6">
 						<h3 class="text-sm font-medium text-gray-300">Results</h3>
 						{#each searchResults as result}
+							{@const existing = existingByHltbId.get(result.id)}
 							<div
-								class="bg-gray-700 rounded-lg p-4 flex gap-4 hover:bg-gray-650 transition-colors"
+								class="rounded-lg p-4 flex gap-4 transition-colors {existing ? 'bg-gray-700/50 opacity-75' : 'bg-gray-700 hover:bg-gray-650'}"
 							>
 								{#if result.imageUrl}
 									<img
 										src={result.imageUrl}
 										alt={result.title}
-										class="w-16 h-20 object-cover rounded"
+										class="w-16 h-20 object-cover rounded flex-shrink-0"
 									/>
 								{:else}
-									<div class="w-16 h-20 bg-gray-600 rounded flex items-center justify-center">
+									<div class="w-16 h-20 bg-gray-600 rounded flex items-center justify-center flex-shrink-0">
 										<span class="text-gray-500 text-xs">No Image</span>
 									</div>
 								{/if}
-								<div class="flex-1">
+								<div class="flex-1 min-w-0">
 									<h4 class="text-white font-medium mb-1">{result.title}</h4>
+									{#if existing}
+										<p class="text-xs font-medium text-amber-400 mb-1">Already in library — {statusLabel[existing.status]}</p>
+									{/if}
 									<div class="text-xs text-gray-400 space-y-0.5">
 										<p>Main Story: {result.mainStoryHours}h</p>
 										<p>Main + Extras: {result.mainPlusExtrasHours}h</p>
 										<p>Target: ~{result.targetHours}h</p>
 									</div>
 								</div>
-								<div class="flex flex-col gap-1.5 self-center">
-									<button
-										type="button"
-										on:click={() => addGameFromHLTB(result)}
-										disabled={saving}
-										class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 text-sm"
-									>
-										{saving ? 'Adding...' : 'Add'}
-									</button>
-									<button
-										type="button"
-										on:click={() => addGameFromHLTB(result, true)}
-										disabled={saving}
-										class="px-4 py-1.5 bg-purple-600/80 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 text-xs"
-									>
-										💫 Wishlist
-									</button>
+								<div class="flex flex-col gap-1.5 self-center flex-shrink-0">
+									{#if existing}
+										<span class="px-3 py-1.5 bg-gray-600 text-gray-400 rounded-lg text-xs text-center cursor-default">
+											{statusLabel[existing.status]}
+										</span>
+									{:else}
+										<button
+											type="button"
+											on:click={() => addGameFromHLTB(result)}
+											disabled={saving}
+											class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 text-sm"
+										>
+											{saving ? 'Adding...' : 'Add'}
+										</button>
+										<button
+											type="button"
+											on:click={() => addGameFromHLTB(result, true)}
+											disabled={saving}
+											class="px-4 py-1.5 bg-purple-600/80 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 text-xs"
+										>
+											💫 Wishlist
+										</button>
+									{/if}
 								</div>
 							</div>
 						{/each}

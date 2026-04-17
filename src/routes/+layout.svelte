@@ -13,6 +13,7 @@
 	import { isOnline, showOfflineBanner } from '$lib/stores/network';
 	import { toggleTheme } from '$lib/stores/theme';
 	import { browser } from '$app/environment';
+	import { allGames } from '$lib/stores/games';
 
 	const showAddGameModal = writable(false);
 	let defaultFilter = browser ? (localStorage.getItem('defaultFilter') || 'all') : 'all';
@@ -231,6 +232,7 @@
 		open={$showAddGameModal}
 		onClose={closeAddGameModal}
 		onGameAdded={handleGameAdded}
+		games={$allGames}
 	/>
 
 	<KeyboardShortcutsHelp open={showShortcutsHelp} onClose={() => (showShortcutsHelp = false)} />
