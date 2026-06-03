@@ -1,20 +1,13 @@
 <script lang="ts">
 	import type { Game } from '$lib/types';
 	import { getTargetHours } from '$lib/utils';
+	import { PRIORITY_CONFIG } from '$lib/constants';
 
 	export let game: Game;
 	export let onClick: () => void;
 
 	const targetHours = getTargetHours(game);
-
-	const priorityConfig = {
-		must_play: { icon: '★', color: 'text-yellow-400', label: 'Must Play' },
-		high: { icon: '●', color: 'text-gray-400', label: 'High' },
-		medium: { icon: '●', color: 'text-amber-600', label: 'Medium' },
-		low: { icon: '○', color: 'text-gray-600', label: 'Low' }
-	};
-
-	const priority = priorityConfig[game.priority];
+	const priority = PRIORITY_CONFIG[game.priority];
 
 	$: mainHours = game.main_story_hours ? Math.round(game.main_story_hours) : null;
 	$: extrasHours = game.main_plus_extras_hours ? Math.round(game.main_plus_extras_hours) : null;
@@ -44,7 +37,7 @@
 	<div class="p-3">
 		<div class="flex items-start justify-between gap-1.5 mb-2">
 			<h3 class="font-semibold text-gray-900 dark:text-white text-xs line-clamp-2 flex-1">{game.title}</h3>
-			<span class="text-base {priority.color} flex-shrink-0" title={priority.label}>{priority.icon}</span>
+			<span class="text-base {priority.tailwindColor} flex-shrink-0" title={priority.label}>{priority.icon}</span>
 		</div>
 
 		<!-- Platforms -->

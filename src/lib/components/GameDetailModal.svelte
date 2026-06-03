@@ -12,6 +12,7 @@
 		'Tactical RPG', 'Visual Novel'
 	];
 	import { getTargetHours } from '$lib/utils';
+	import { PRIORITY_CONFIG } from '$lib/constants';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
 		saveNoteToLocal,
@@ -108,14 +109,6 @@
 	// Progress bar color
 	$: progressColor =
 		progress < 30 ? 'bg-red-500' : progress < 70 ? 'bg-yellow-500' : 'bg-green-500';
-
-	// Priority config
-	const priorityConfig = {
-		must_play: { icon: '★', label: 'Must Play' },
-		high: { icon: '●', label: 'High' },
-		medium: { icon: '●', label: 'Medium' },
-		low: { icon: '○', label: 'Low' }
-	};
 
 	// Other playing games (excluding the current one)
 	$: otherPlayingGames = playingGames.filter((g) => g.id !== game?.id);
@@ -616,7 +609,7 @@
 					<div class="flex items-center gap-2 text-sm text-gray-400">
 						<span>Status: {status}</span>
 						<span>•</span>
-						<span>Priority: {priorityConfig[priority].icon} {priorityConfig[priority].label}</span>
+						<span>Priority: {PRIORITY_CONFIG[priority].icon} {PRIORITY_CONFIG[priority].label}</span>
 					</div>
 					<div class="mt-3">
 						{#if !editingGenres}

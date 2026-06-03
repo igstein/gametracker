@@ -172,7 +172,35 @@
 	});
 </script>
 
-{#if $requiresPasswordReset}
+{#if $page.data.supabaseError}
+	<div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+		<div class="max-w-md w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
+			<div class="text-4xl mb-3">🎮💤</div>
+			<h1 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+				Can't reach the database
+			</h1>
+			<p class="text-gray-600 dark:text-gray-400 text-sm mb-4">
+				Your Supabase project may be paused or temporarily unavailable.
+				If it's been inactive for a while, restore it from the
+				<a
+					href="https://supabase.com/dashboard"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="text-blue-600 dark:text-blue-400 hover:underline"
+				>Supabase dashboard</a>.
+			</p>
+			<p class="text-xs text-gray-500 dark:text-gray-500 mb-4 font-mono break-all">
+				{$page.data.supabaseError}
+			</p>
+			<button
+				on:click={() => location.reload()}
+				class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+			>
+				Retry
+			</button>
+		</div>
+	</div>
+{:else if $requiresPasswordReset}
 	<PasswordResetModal />
 {:else if !$page.data.user}
 	<Auth />

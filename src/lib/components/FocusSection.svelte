@@ -3,6 +3,7 @@
 	import { browser } from '$app/environment';
 	import type { Game } from '$lib/types';
 	import { getTargetHours } from '$lib/utils';
+	import { PRIORITY_CONFIG, STATUS_CONFIG } from '$lib/constants';
 
 	export let games: Game[] = [];
 	export let onOpenGame: (game: Game) => void;
@@ -81,21 +82,6 @@
 		showPicker = false;
 	}
 
-	const statusLabel: Record<string, string> = {
-		playing: '▶',
-		backlog: '📋',
-		finished: '✅',
-		abandoned: '❌',
-		wishlist: '💫'
-	};
-
-	const priorityConfig: Record<string, { icon: string; color: string }> = {
-		must_play: { icon: '★', color: 'text-yellow-400' },
-		high: { icon: '●', color: 'text-gray-400' },
-		medium: { icon: '●', color: 'text-amber-600' },
-		low: { icon: '○', color: 'text-gray-600' }
-	};
-
 	onMount(loadFocus);
 </script>
 
@@ -132,7 +118,7 @@
 				{@const prog = Math.min(100, target > 0 ? (game.played_hours / target) * 100 : 0)}
 				{@const remaining = Math.max(0, target - game.played_hours)}
 				{@const progColor = prog < 30 ? 'bg-red-500' : prog < 70 ? 'bg-yellow-500' : 'bg-green-500'}
-				{@const prio = priorityConfig[game.priority]}
+				{@const prio = PRIORITY_CONFIG[game.priority]}
 				<div
 					on:click={() => onOpenGame(game)}
 					on:keydown={(e) => e.key === 'Enter' && onOpenGame(game)}
@@ -150,10 +136,10 @@
 					<div class="p-2">
 						<div class="flex items-start justify-between gap-1 mb-1">
 							<h3 class="font-semibold text-gray-900 dark:text-white text-[10px] line-clamp-2 flex-1">{game.title}</h3>
-							<span class="text-xs {prio.color} flex-shrink-0">{prio.icon}</span>
+							<span class="text-xs {prio.tailwindColor} flex-shrink-0">{prio.icon}</span>
 						</div>
 						<div class="text-[9px] text-gray-500 dark:text-gray-400 mb-1.5">
-							{statusLabel[game.status] ?? ''} {game.status}
+							{STATUS_CONFIG[game.status]?.icon ?? ''} {game.status}
 						</div>
 						{#if target > 0}
 							<div class="space-y-1">
@@ -235,7 +221,7 @@
 							<div class="flex-1 min-w-0">
 								<p class="text-white text-sm font-medium truncate">{game.title}</p>
 								<p class="text-gray-400 text-xs mt-0.5">
-									{statusLabel[game.status]} {game.status}
+									{STATUS_CONFIG[game.status]?.icon ?? ''} {game.status}
 									{#if target > 0}· {remaining.toFixed(0)}h left{/if}
 								</p>
 							</div>

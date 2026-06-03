@@ -18,13 +18,21 @@ export const load: LayoutLoad = async ({ depends }) => {
 
 	const supabase = getSupabase();
 
-	const {
-		data: { session }
-	} = await supabase.auth.getSession();
+	try {
+		const [
+			{ data: { session } },
+			{ data: { user } }
+		] = await Promise.all([supabase.auth.getSession(), supabase.auth.getUser()]);
 
-	const {
-		data: { user }
-	} = await supabase.auth.getUser();
-
-	return { supabase, session, user };
+		return { supabase, session, user, supabaseError: null as string | null };
+	} catch (e) {
+		console.error('Failed to reach Supabase:', e);
+		const message = e instanceof Error ? e.message : 'Unknown error';
+		return {
+			supabase,
+			session: null,
+			user: null,
+			supabaseError: message
+		};
+	}
 };

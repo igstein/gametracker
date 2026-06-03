@@ -1,19 +1,17 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import type { Game, GameStatus, GamePriority, HLTBSearchResult } from '$lib/types';
+	import { STATUS_CONFIG } from '$lib/constants';
 
 	export let open = false;
 	export let onClose: () => void;
 	export let onGameAdded: () => void;
 	export let games: Game[] = [];
 
-	const statusLabel: Record<string, string> = {
-		playing: '▶ Playing',
-		backlog: '📋 Backlog',
-		finished: '✅ Finished',
-		abandoned: '❌ Abandoned',
-		wishlist: '💫 Wishlist'
-	};
+	const statusLabel = Object.fromEntries(
+		(Object.entries(STATUS_CONFIG) as [GameStatus, { icon: string; label: string }][])
+			.map(([key, { icon, label }]) => [key, `${icon} ${label}`])
+	) as Record<GameStatus, string>;
 
 	$: existingByHltbId = new Map(games.filter((g) => g.hltb_id != null).map((g) => [g.hltb_id!, g]));
 
@@ -264,7 +262,18 @@
 						<p class="text-sm text-gray-400 mt-2">Searching...</p>
 					{/if}
 					{#if searchError}
-						<p class="text-sm text-yellow-500 mt-2">{searchError}</p>
+						<div class="flex items-center gap-3 mt-2">
+							<p class="text-sm text-yellow-500">{searchError}</p>
+							{#if searchError.includes('unavailable') || searchError.includes('Failed')}
+								<button
+									type="button"
+									on:click={() => performSearch(searchQuery)}
+									class="text-sm text-blue-400 hover:text-blue-300 underline whitespace-nowrap"
+								>
+									Retry
+								</button>
+							{/if}
+						</div>
 					{/if}
 				</div>
 

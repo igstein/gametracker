@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { theme, toggleTheme } from '$lib/stores/theme';
+	import { PRIORITY_CONFIG, STATUS_CONFIG } from '$lib/constants';
+	import type { GamePriority, GameStatus } from '$lib/types';
 
 	export let onAddGame: () => void;
 	export let onFilterChange: (filter: string) => void;
@@ -18,19 +20,21 @@
 
 	const filters = [
 		{ id: 'all', label: 'All', icon: '🎮' },
-		{ id: 'playing', label: 'Playing', icon: '▶' },
-		{ id: 'backlog', label: 'Backlog', icon: '📋' },
-		{ id: 'finished', label: 'Finished', icon: '✅' },
-		{ id: 'abandoned', label: 'Abandoned', icon: '❌' },
-		{ id: 'wishlist', label: 'Wishlist', icon: '💫' }
+		...(Object.keys(STATUS_CONFIG) as GameStatus[]).map((id) => ({
+			id,
+			label: STATUS_CONFIG[id].label,
+			icon: STATUS_CONFIG[id].icon
+		}))
 	];
 
 	const priorityFilters = [
-		{ id: 'all', label: 'All' },
-		{ id: 'must_play', label: 'Must Play', symbol: '★', color: '#FFD700' },
-		{ id: 'high', label: 'High', symbol: '●', color: '#A0AEC0' },
-		{ id: 'medium', label: 'Medium', symbol: '●', color: '#CD7F32' },
-		{ id: 'low', label: 'Low', symbol: '○', color: '#9CA3AF' }
+		{ id: 'all', label: 'All', symbol: '', color: '' },
+		...(Object.keys(PRIORITY_CONFIG) as GamePriority[]).map((id) => ({
+			id,
+			label: PRIORITY_CONFIG[id].label,
+			symbol: PRIORITY_CONFIG[id].icon,
+			color: PRIORITY_CONFIG[id].hexColor
+		}))
 	];
 
 	let importInput: HTMLInputElement;

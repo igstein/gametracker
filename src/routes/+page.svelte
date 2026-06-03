@@ -6,8 +6,10 @@
 	import WishlistCard from '$lib/components/WishlistCard.svelte';
 	import GameDetailModal from '$lib/components/GameDetailModal.svelte';
 	import FocusSection from '$lib/components/FocusSection.svelte';
+	import NextUpSection from '$lib/components/NextUpSection.svelte';
 	import type { Game } from '$lib/types';
-	import { getTargetHours, scoreGame } from '$lib/utils';
+	import { getTargetHours } from '$lib/utils';
+	import { PRIORITY_ORDER } from '$lib/constants';
 	import type { Writable } from 'svelte/store';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import { isOnline } from '$lib/stores/network';
@@ -25,16 +27,11 @@
 	let games: Game[] = [];
 	let loading = true;
 	let error = '';
+	let cacheNotice = '';
 	let selectedGame: Game | null = null;
 	let showDetailModal = false;
 	let realtimeChannel: RealtimeChannel | null = null;
 	let realtimeConnected = false;
-	let showDebug = false;
-	let nextUpOpen = false;
-	let moodGenre: string | null = null;
-	let moodDevice: string | null = null;
-	let moodSetting: string | null = null;
-	let showMoodPicker = false;
 
 	$: supabase = $page.data.supabase;
 
@@ -102,8 +99,7 @@
 				sorted.sort((a, b) => getProgress(b) - getProgress(a));
 				break;
 			case 'priority':
-				const priorityOrder = { must_play: 0, high: 1, medium: 2, low: 3 };
-				sorted.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+				sorted.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
 				break;
 			case 'last_played':
 				sorted.sort((a, b) => {
@@ -151,8 +147,7 @@
 				sorted.sort((a, b) => b.title.localeCompare(a.title));
 				break;
 			case 'priority':
-				const priorityOrder = { must_play: 0, high: 1, medium: 2, low: 3 };
-				sorted.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+				sorted.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
 				break;
 			case 'main_story_asc':
 				sorted.sort((a, b) => (a.main_story_hours ?? 999) - (b.main_story_hours ?? 999));
@@ -178,86 +173,38 @@
 	// Unique settings across all games
 	$: availableSettings = [...new Set(games.flatMap((g) => g.setting ?? []))].sort();
 
-	// Mood options derived from games that have data
-	$: moodGenreOptions = [...new Set(games.flatMap((g) => g.genre ?? []))].sort();
-	$: moodDeviceOptions = availableDevices;
-	$: moodSettingOptions = availableSettings;
-
-	// Next Up: Top 3 games scored by priority, recency, completion, genre diversity and age
-	$: nextUpGames = (() => {
-		const candidates = libraryGames.filter(
-			(game) => game.status === 'playing' || game.status === 'backlog'
-		);
-
-		// Find genre of most recently played game
-		const recentGame = games
-			.filter((g) => g.last_played && g.genre?.length)
-			.sort((a, b) => new Date(b.last_played ?? '').getTime() - new Date(a.last_played ?? '').getTime())[0];
-		const recentGenres = recentGame?.genre ?? [];
-
-		return candidates
-			.map((game) => {
-				const target = getTargetHours(game);
-				const rest = Math.max(0, target - game.played_hours);
-				const progress = target > 0 ? Math.min(game.played_hours / target, 1) : 0;
-				const P = { must_play: 1.7, high: 1.3, medium: 1.0, low: 0.7 }[game.priority];
-				const restFactor = 1 / (rest + 1);
-				const progressFactor = 1 + progress * progress * 2;
-				const startedFactor = game.played_hours > 0 ? 1.8 : 1.0;
-				const shortGameFactor = target > 0 ? 1 + 1 / Math.log2(target + 2) : 1.0;
-				const daysSince = game.last_played ? (Date.now() - new Date(game.last_played).getTime()) / 86_400_000 : null;
-				const recencyFactor = daysSince !== null ? Math.exp(-daysSince / 7) : 0.5;
-				const genreFactor = recentGenres.length && game.genre?.length ? (game.genre.some((g) => recentGenres.includes(g)) ? 0.8 : 1.2) : 1.0;
-				const backlogDays = game.date_added ? (Date.now() - new Date(game.date_added).getTime()) / 86_400_000 : 0;
-				const ageFactor = 1 + Math.tanh(backlogDays / 365) * 0.5;
-				const statusFactor = game.status === 'playing' ? 1.5 : 1.0;
-				const moodGenreFactor = moodGenre ? (game.genre?.includes(moodGenre) ? 2.0 : 0.6) : 1.0;
-				const moodDeviceFactor = moodDevice ? (game.devices?.includes(moodDevice) ? 1.8 : 0.65) : 1.0;
-				const moodSettingFactor = moodSetting ? (game.setting?.includes(moodSetting) ? 1.8 : 0.65) : 1.0;
-				const moodFactor = moodGenreFactor * moodDeviceFactor * moodSettingFactor;
-				const score = P * restFactor * progressFactor * startedFactor * shortGameFactor * recencyFactor * genreFactor * ageFactor * statusFactor * moodFactor;
-				return { game, score, debug: { P, restFactor, progressFactor, startedFactor, shortGameFactor, recencyFactor, genreFactor, ageFactor, statusFactor, moodFactor } };
-			})
-			.sort((a, b) => b.score - a.score)
-			.slice(0, 3);
-	})();
-
 	async function loadGames() {
 		loading = true;
 		error = '';
+		cacheNotice = '';
 		try {
 			if ($isOnline) {
-				// Online: load from Supabase and cache locally
 				const { data: gamesData, error: loadError } = await supabase
 					.from('games')
 					.select('*')
 					.order('created_at', { ascending: false });
 
-				if (loadError) {
-					console.error('Error loading games:', loadError);
-					error = loadError.message;
-					throw loadError;
-				}
+				if (loadError) throw loadError;
 
 				games = gamesData || [];
-
-				// Cache in IndexedDB
 				await saveGamesToLocal(games);
 			} else {
-				// Offline: load from IndexedDB
 				console.log('[Offline] Loading games from local cache');
 				games = await getGamesFromLocal();
+				cacheNotice = 'Offline — showing cached library';
 			}
 		} catch (e) {
 			console.error('Error loading games:', e);
-			error = e instanceof Error ? e.message : 'Failed to load games';
-
-			// Try loading from cache as fallback
 			try {
 				games = await getGamesFromLocal();
-				error = 'Loaded from offline cache';
+				if (games.length > 0) {
+					cacheNotice = "Can't reach the server — showing cached library";
+				} else {
+					error = e instanceof Error ? e.message : 'Failed to load games';
+				}
 			} catch {
 				games = [];
+				error = e instanceof Error ? e.message : 'Failed to load games';
 			}
 		} finally {
 			loading = false;
@@ -374,57 +321,10 @@
 			});
 	}
 
-	function loadNextUpOpen() {
-		if (!browser) return;
-		nextUpOpen = localStorage.getItem('gametracker_nextup_open') === 'true';
-	}
-
-	function toggleNextUp() {
-		nextUpOpen = !nextUpOpen;
-		if (browser) localStorage.setItem('gametracker_nextup_open', String(nextUpOpen));
-	}
-
-	function loadMood() {
-		if (!browser) return;
-		const stored = localStorage.getItem('gametracker_mood');
-		if (!stored) return;
-		try {
-			const data = JSON.parse(stored);
-			const setAt = new Date(data.setAt);
-			const today7am = new Date();
-			today7am.setHours(7, 0, 0, 0);
-			if (setAt < today7am) {
-				localStorage.removeItem('gametracker_mood');
-				return;
-			}
-			moodGenre = data.genre ?? null;
-			moodDevice = data.device ?? null;
-			moodSetting = data.setting ?? null;
-		} catch {
-			localStorage.removeItem('gametracker_mood');
-		}
-	}
-
-	function saveMood() {
-		if (!browser) return;
-		if (!moodGenre && !moodDevice && !moodSetting) {
-			localStorage.removeItem('gametracker_mood');
-		} else {
-			localStorage.setItem('gametracker_mood', JSON.stringify({
-				genre: moodGenre,
-				device: moodDevice,
-				setting: moodSetting,
-				setAt: new Date().toISOString()
-			}));
-		}
-	}
-
 	onMount(async () => {
 		// Initialize IndexedDB
 		await initDB();
 
-		loadNextUpOpen();
-		loadMood();
 		loadGames();
 		setupRealtimeSubscription();
 
@@ -448,6 +348,20 @@
 </script>
 
 <div class="p-4 md:p-8 safe-bottom">
+	{#if cacheNotice}
+		<div
+			class="mb-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 px-4 py-2 rounded-lg text-sm flex items-center justify-between gap-3"
+		>
+			<span>{cacheNotice}</span>
+			<button
+				on:click={loadGames}
+				class="text-amber-700 dark:text-amber-300 hover:underline whitespace-nowrap"
+			>
+				Retry
+			</button>
+		</div>
+	{/if}
+
 	<!-- Realtime Connection Status -->
 	{#if realtimeConnected}
 		<div
@@ -462,166 +376,8 @@
 		<FocusSection {games} onOpenGame={openGameDetail} />
 	{/if}
 
-	{#if !loading && !isWishlistView && nextUpGames.length > 0}
-		<div class="mb-8">
-			<div class="flex items-center gap-2 mb-2 flex-wrap">
-				<button
-					on:click={toggleNextUp}
-					class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-				>
-					Next Up <span class="text-base">{nextUpOpen ? '▾' : '▸'}</span>
-				</button>
-				{#if nextUpOpen}
-				{#if moodGenre}
-					<span class="flex items-center gap-1 px-2 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded-full">
-						{moodGenre}
-						<button on:click={() => { moodGenre = null; saveMood(); }} class="text-purple-400 hover:text-white leading-none">×</button>
-					</span>
-				{/if}
-				{#if moodDevice}
-					<span class="flex items-center gap-1 px-2 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded-full">
-						{moodDevice}
-						<button on:click={() => { moodDevice = null; saveMood(); }} class="text-purple-400 hover:text-white leading-none">×</button>
-					</span>
-				{/if}
-				{#if moodSetting}
-					<span class="flex items-center gap-1 px-2 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded-full">
-						{moodSetting}
-						<button on:click={() => { moodSetting = null; saveMood(); }} class="text-purple-400 hover:text-white leading-none">×</button>
-					</span>
-				{/if}
-				<button
-					on:click={() => (showMoodPicker = !showMoodPicker)}
-					class="text-[10px] px-2 py-0.5 rounded transition-colors {showMoodPicker ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'}"
-				>
-					{showMoodPicker ? 'done' : '+ mood'}
-				</button>
-				<button
-					on:click={() => (showDebug = !showDebug)}
-					class="text-[10px] px-2 py-0.5 rounded font-mono transition-colors {showDebug ? 'bg-yellow-400 text-gray-900' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600'}"
-				>
-					{showDebug ? 'debug: on' : 'debug'}
-				</button>
-			{/if}
-			</div>
-			{#if nextUpOpen}
-			{#if showMoodPicker}
-				<div class="bg-gray-100 dark:bg-gray-800/80 rounded-lg p-3 mb-3 border border-gray-200 dark:border-gray-700">
-					{#if moodGenreOptions.length > 0}
-						<div class="mb-2">
-							<p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Genre</p>
-							<div class="flex flex-wrap gap-1.5">
-								{#each moodGenreOptions as g}
-									<button
-										on:click={() => { moodGenre = moodGenre === g ? null : g; saveMood(); }}
-										class="px-2 py-0.5 text-xs rounded-full transition-colors {moodGenre === g ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
-									>{g}</button>
-								{/each}
-							</div>
-						</div>
-					{/if}
-					{#if moodSettingOptions.length > 0}
-						<div class="mb-2">
-							<p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Setting</p>
-							<div class="flex flex-wrap gap-1.5">
-								{#each moodSettingOptions as s}
-									<button
-										on:click={() => { moodSetting = moodSetting === s ? null : s; saveMood(); }}
-										class="px-2 py-0.5 text-xs rounded-full transition-colors {moodSetting === s ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
-									>{s}</button>
-								{/each}
-							</div>
-						</div>
-					{/if}
-					{#if moodDeviceOptions.length > 0}
-						<div>
-							<p class="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Device</p>
-							<div class="flex flex-wrap gap-1.5">
-								{#each moodDeviceOptions as d}
-									<button
-										on:click={() => { moodDevice = moodDevice === d ? null : d; saveMood(); }}
-										class="px-2 py-0.5 text-xs rounded-full transition-colors {moodDevice === d ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}"
-									>{d}</button>
-								{/each}
-							</div>
-						</div>
-					{/if}
-					{#if moodGenreOptions.length === 0 && moodSettingOptions.length === 0 && moodDeviceOptions.length === 0}
-						<p class="text-xs text-gray-500">Add genres, settings, and devices to your games first.</p>
-					{/if}
-				</div>
-			{/if}
-			<div class="flex gap-3 overflow-x-auto pb-1">
-				{#each nextUpGames as item (item.game.id)}
-					{@const game = item.game}
-					{@const t = getTargetHours(game)}
-					{@const prog = Math.min(100, t > 0 ? (game.played_hours / t) * 100 : 0)}
-					{@const progColor = prog < 30 ? 'bg-red-500' : prog < 70 ? 'bg-yellow-500' : 'bg-green-500'}
-					{@const priorityConfig = { must_play: { icon: '★', color: 'text-yellow-400', label: 'Must Play' }, high: { icon: '●', color: 'text-gray-400', label: 'High' }, medium: { icon: '●', color: 'text-amber-600', label: 'Medium' }, low: { icon: '○', color: 'text-gray-600', label: 'Low' } }}
-					{@const prio = priorityConfig[game.priority]}
-					<div
-						on:click={() => openGameDetail(game)}
-						on:keydown={(e) => e.key === 'Enter' && openGameDetail(game)}
-						role="button"
-						tabindex="0"
-						class="flex-shrink-0 w-28 lg:w-36 xl:w-40 bg-white dark:bg-gray-800 rounded-lg overflow-hidden cursor-pointer border relative transition-colors hover:bg-gray-50 dark:hover:bg-gray-750 {game.status === 'finished' ? 'border-green-500' : game.status === 'abandoned' ? 'border-gray-400' : 'border-gray-200 dark:border-gray-700'}"
-					>
-						{#if game.status === 'finished'}
-							<span class="absolute top-1 right-1 z-10 bg-green-600 text-white text-[7px] font-bold uppercase px-1 py-0.5 rounded tracking-wide">✓</span>
-						{:else if game.status === 'abandoned'}
-							<span class="absolute top-1 right-1 z-10 bg-gray-400 text-white text-[7px] font-bold uppercase px-1 py-0.5 rounded tracking-wide">✗</span>
-						{/if}
-						<div class="aspect-[2/3] bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-							{#if game.cover_image_url}
-								<img
-									src={game.cover_image_url}
-									alt={game.title}
-									class="w-full h-full object-cover"
-									style={game.status === 'finished' ? 'filter: brightness(0.5) saturate(0.7);' : game.status === 'abandoned' ? 'filter: brightness(0.35) saturate(0.4);' : ''}
-								/>
-							{:else}
-								<span class="text-2xl">🎮</span>
-							{/if}
-						</div>
-						<div class="p-2">
-							<div class="flex items-start justify-between gap-1 mb-1.5">
-								<h3 class="font-semibold text-gray-900 dark:text-white text-[10px] line-clamp-2 flex-1">{game.title}</h3>
-								<span class="text-xs {prio.color} flex-shrink-0" title={prio.label}>{prio.icon}</span>
-							</div>
-							{#if t > 0}
-							<div class="space-y-1">
-								<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 overflow-hidden">
-									<div class="{progColor} h-full transition-all" style="width: {prog}%"></div>
-								</div>
-								<div class="flex justify-between text-[9px] text-gray-600 dark:text-gray-400">
-									<span>{Math.round(game.played_hours * 10) / 10}h / {t.toFixed(0)}h</span>
-									<span>{prog.toFixed(0)}%</span>
-								</div>
-							</div>
-							{:else}
-							<p class="text-[9px] text-amber-500 dark:text-amber-400">Set target time</p>
-							{/if}
-							{#if showDebug}
-							<div class="mt-1.5 border-t border-yellow-400/30 pt-1 space-y-0.5 font-mono text-[8px] text-yellow-400">
-								<div class="flex justify-between"><span>score</span><span>{item.score.toFixed(4)}</span></div>
-								<div class="flex justify-between"><span>P</span><span>{item.debug.P.toFixed(2)}</span></div>
-								<div class="flex justify-between"><span>rest</span><span>{item.debug.restFactor.toFixed(3)}</span></div>
-								<div class="flex justify-between"><span>prog</span><span>{item.debug.progressFactor.toFixed(3)}</span></div>
-								<div class="flex justify-between"><span>started</span><span>{item.debug.startedFactor.toFixed(2)}</span></div>
-								<div class="flex justify-between"><span>short</span><span>{item.debug.shortGameFactor.toFixed(3)}</span></div>
-								<div class="flex justify-between"><span>recency</span><span>{item.debug.recencyFactor.toFixed(3)}</span></div>
-								<div class="flex justify-between"><span>genre</span><span>{item.debug.genreFactor.toFixed(2)}</span></div>
-								<div class="flex justify-between"><span>age</span><span>{item.debug.ageFactor.toFixed(3)}</span></div>
-								<div class="flex justify-between"><span>status</span><span>{item.debug.statusFactor.toFixed(2)}</span></div>
-								<div class="flex justify-between"><span>mood</span><span>{item.debug.moodFactor.toFixed(2)}</span></div>
-							</div>
-							{/if}
-						</div>
-					</div>
-				{/each}
-			</div>
-			{/if}
-		</div>
+	{#if !loading && !isWishlistView}
+		<NextUpSection games={libraryGames} onOpenGame={openGameDetail} />
 	{/if}
 
 	{#if isWishlistView}

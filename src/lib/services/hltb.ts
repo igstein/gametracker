@@ -12,37 +12,33 @@ function randomUserAgent(): string {
 	return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
-// Cache for discovered endpoint + auth token + fingerprint
-let cachedSearchPath: string | null = null;
-let cachedAuthToken: string | null = null;
-let cachedHpKey: string | null = null;
-let cachedHpVal: string | null = null;
-let cacheTimestamp = 0;
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-
-function isCacheValid(): boolean {
-	return cachedSearchPath !== null && cachedAuthToken !== null && Date.now() - cacheTimestamp < CACHE_TTL_MS;
-}
-
-function invalidateCache(): void {
-	cachedSearchPath = null;
-	cachedAuthToken = null;
-	cachedHpKey = null;
-	cachedHpVal = null;
-	cacheTimestamp = 0;
-}
-
-// Static fallback endpoint in case discovery fails
+const KNOWN_SEARCH_ENDPOINTS = ['/api/find', '/api/search'];
 const FALLBACK_SEARCH_PATH = '/api/find';
+const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes — HLTB tokens are short-lived
 
 /**
- * Step 1: Fetch HLTB homepage, scan JS scripts, extract the search API path.
- * Mirrors the Python library approach: find fetch() calls with method:"POST"
- * to /api/*, which identifies the search endpoint.
+ * A session holds one User-Agent + endpoint + auth token. HLTB binds tokens to the
+ * UA that requested them, so all three steps (discover/auth/search) must use the
+ * same UA, and cached tokens must reuse their original UA.
  */
-async function discoverSearchEndpoint(): Promise<string> {
+interface Session {
+	searchPath: string;
+	authToken: string;
+	hpKey: string;
+	hpVal: string;
+	userAgent: string;
+	createdAt: number;
+}
+
+let cachedSession: Session | null = null;
+
+function isSessionValid(s: Session | null): s is Session {
+	return s !== null && Date.now() - s.createdAt < SESSION_TTL_MS;
+}
+
+async function discoverSearchEndpoint(userAgent: string): Promise<string> {
 	const headers = {
-		'User-Agent': randomUserAgent(),
+		'User-Agent': userAgent,
 		Referer: 'https://howlongtobeat.com/'
 	};
 
@@ -55,21 +51,13 @@ async function discoverSearchEndpoint(): Promise<string> {
 	}
 
 	const html = await res.text();
-
-	// Extract all script src URLs from the page
 	const scriptMatches = html.matchAll(/<script[^>]+src="([^"]+\.js)"/g);
 	const scriptUrls: string[] = [];
 	for (const match of scriptMatches) {
 		scriptUrls.push(match[1]);
 	}
 
-	if (scriptUrls.length === 0) {
-		return FALLBACK_SEARCH_PATH;
-	}
-
-	// Regex from the Python library: find fetch("/api/...", {... method: "POST" ...})
-	// This distinguishes the search POST endpoint from the GET init endpoint
-	const postFetchPattern = /fetch\s*\(\s*["']\/api\/([a-zA-Z0-9_/]+)[^"']*["']\s*,\s*\{[^}]*method:\s*["']POST["'][^}]*\}/is;
+	if (scriptUrls.length === 0) return FALLBACK_SEARCH_PATH;
 
 	for (const scriptUrl of scriptUrls) {
 		const fullUrl = scriptUrl.startsWith('http')
@@ -87,56 +75,45 @@ async function discoverSearchEndpoint(): Promise<string> {
 
 		const scriptText = await scriptRes.text();
 
-		const match = postFetchPattern.exec(scriptText);
-		if (match) {
-			const pathSuffix = match[1];
-			// Extract the base path (e.g. "finder" from "finder/v2")
-			const basePath = pathSuffix.includes('/') ? pathSuffix.split('/')[0] : pathSuffix;
-			return `/api/${basePath}`;
+		const knownMatch = /["'`]\/api\/(find|search)(?:\/[a-zA-Z0-9_/]*)?["'`]/i.exec(scriptText);
+		if (knownMatch) return `/api/${knownMatch[1]}`;
+
+		const fetchMatch = /fetch\s*\(\s*["'`]\/api\/([a-zA-Z][a-zA-Z0-9_]*)["'`]/i.exec(scriptText);
+		if (fetchMatch) {
+			const path = fetchMatch[1];
+			const nonSearch = ['user', 'auth', 'login', 'profile', 'settings', 'upload'];
+			if (!nonSearch.includes(path)) return `/api/${path}`;
 		}
 	}
 
 	return FALLBACK_SEARCH_PATH;
 }
 
-/**
- * Step 2: Get auth token and fingerprint from the init endpoint.
- */
-async function getAuthData(searchPath: string): Promise<{ token: string; hpKey: string; hpVal: string }> {
-	const timestamp = Date.now();
-	const initUrl = `https://howlongtobeat.com${searchPath}/init?t=${timestamp}`;
+async function getAuthData(
+	searchPath: string,
+	userAgent: string
+): Promise<{ token: string; hpKey: string; hpVal: string }> {
+	const initUrl = `https://howlongtobeat.com${searchPath}/init?t=${Date.now()}`;
 
 	const res = await fetch(initUrl, {
 		headers: {
-			'User-Agent': randomUserAgent(),
+			'User-Agent': userAgent,
 			Referer: 'https://howlongtobeat.com/',
 			Origin: 'https://howlongtobeat.com'
 		}
 	});
 
-	if (!res.ok) {
-		throw new Error(`Failed to get HLTB auth token: ${res.status}`);
-	}
+	if (!res.ok) throw new Error(`HLTB init failed: ${res.status}`);
 
 	const data = await res.json();
-
 	if (!data.token || typeof data.token !== 'string') {
-		throw new Error('HLTB init endpoint did not return a valid token');
+		throw new Error('HLTB init returned no token');
 	}
 
 	return { token: data.token, hpKey: data.hpKey ?? '', hpVal: data.hpVal ?? '' };
 }
 
-/**
- * Step 3: Execute the search POST request.
- */
-async function executeSearch(
-	searchPath: string,
-	authToken: string,
-	hpKey: string,
-	hpVal: string,
-	query: string
-): Promise<any[]> {
+async function executeSearch(session: Session, query: string): Promise<any[]> {
 	const searchBody: Record<string, any> = {
 		searchType: 'games',
 		searchTerms: query.split(/\s+/),
@@ -153,12 +130,8 @@ async function executeSearch(
 				rangeYear: { min: '', max: '' },
 				modifier: ''
 			},
-			users: {
-				sortCategory: 'postcount'
-			},
-			lists: {
-				sortCategory: 'follows'
-			},
+			users: { sortCategory: 'postcount' },
+			lists: { sortCategory: 'follows' },
 			filter: '',
 			sort: 0,
 			randomizer: 0
@@ -166,36 +139,42 @@ async function executeSearch(
 		useCache: true
 	};
 
-	// HLTB fingerprint: dynamic key in body + headers
-	if (hpKey) {
-		searchBody[hpKey] = hpVal;
-	}
+	if (session.hpKey) searchBody[session.hpKey] = session.hpVal;
 
-	const res = await fetch(`https://howlongtobeat.com${searchPath}`, {
+	const res = await fetch(`https://howlongtobeat.com${session.searchPath}`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
-			'User-Agent': randomUserAgent(),
+			'User-Agent': session.userAgent,
 			Referer: 'https://howlongtobeat.com/',
 			Origin: 'https://howlongtobeat.com',
-			'x-auth-token': authToken,
-			'x-hp-key': hpKey,
-			'x-hp-val': hpVal
+			'x-auth-token': session.authToken,
+			'x-hp-key': session.hpKey,
+			'x-hp-val': session.hpVal
 		},
 		body: JSON.stringify(searchBody)
 	});
 
 	if (!res.ok) {
-		throw new Error(`HLTB search request failed: ${res.status}`);
+		throw new Error(`HLTB search HTTP ${res.status}`);
 	}
 
 	const data = await res.json();
+	return Array.isArray(data.data) ? data.data : [];
+}
 
-	if (!data.data || !Array.isArray(data.data)) {
-		return [];
-	}
-
-	return data.data;
+async function newSession(forcedPath?: string): Promise<Session> {
+	const userAgent = randomUserAgent();
+	const searchPath = forcedPath ?? (await discoverSearchEndpoint(userAgent));
+	const { token, hpKey, hpVal } = await getAuthData(searchPath, userAgent);
+	return {
+		searchPath,
+		authToken: token,
+		hpKey,
+		hpVal,
+		userAgent,
+		createdAt: Date.now()
+	};
 }
 
 function sanitizeString(value: unknown): string {
@@ -205,7 +184,6 @@ function sanitizeString(value: unknown): string {
 
 function sanitizeNumber(value: unknown): number {
 	if (typeof value !== 'number' || isNaN(value) || !isFinite(value)) return 0;
-	// HLTB returns times in seconds; 10000 hours = 36,000,000 seconds
 	return Math.max(0, Math.min(value, 36_000_000));
 }
 
@@ -214,24 +192,17 @@ function validateAndSanitizeResult(entry: any): HLTBSearchResult | null {
 		if (!entry || typeof entry !== 'object') return null;
 		const id = typeof entry.game_id === 'number' ? entry.game_id : 0;
 		const title = sanitizeString(entry.game_name);
-
 		if (!title || id <= 0) return null;
 
-		// Cover image: HLTB returns a relative path in game_image
 		let imageUrl = '';
 		if (typeof entry.game_image === 'string' && entry.game_image.trim()) {
 			const img = entry.game_image.trim();
 			imageUrl = img.startsWith('http') ? img : `https://howlongtobeat.com/games/${img}`;
 		}
 
-		// HLTB returns times in seconds
-		const mainStorySeconds = sanitizeNumber(entry.comp_main);
-		const mainPlusExtrasSeconds = sanitizeNumber(entry.comp_plus);
-		const completionistSeconds = sanitizeNumber(entry.comp_100);
-
-		const mainStoryHours = mainStorySeconds / 3600;
-		const mainPlusExtrasHours = mainPlusExtrasSeconds / 3600;
-		const completionistHours = completionistSeconds / 3600;
+		const mainStoryHours = sanitizeNumber(entry.comp_main) / 3600;
+		const mainPlusExtrasHours = sanitizeNumber(entry.comp_plus) / 3600;
+		const completionistHours = sanitizeNumber(entry.comp_100) / 3600;
 
 		const targetHours =
 			mainStoryHours > 0 && mainPlusExtrasHours > 0
@@ -257,57 +228,52 @@ function validateAndSanitizeResult(entry: any): HLTBSearchResult | null {
 	}
 }
 
-/**
- * Ensures we have a valid cached search path and auth token.
- * Discovers them if needed or if cache is stale.
- */
-async function ensureEndpointAndToken(): Promise<{ searchPath: string; authToken: string; hpKey: string; hpVal: string }> {
-	if (isCacheValid()) {
-		return { searchPath: cachedSearchPath!, authToken: cachedAuthToken!, hpKey: cachedHpKey!, hpVal: cachedHpVal! };
-	}
-
-	const searchPath = await discoverSearchEndpoint();
-	const { token, hpKey, hpVal } = await getAuthData(searchPath);
-
-	cachedSearchPath = searchPath;
-	cachedAuthToken = token;
-	cachedHpKey = hpKey;
-	cachedHpVal = hpVal;
-	cacheTimestamp = Date.now();
-
-	return { searchPath, authToken: token, hpKey, hpVal };
+async function trySearch(session: Session, query: string): Promise<HLTBSearchResult[]> {
+	const rawResults = await executeSearch(session, query);
+	return rawResults
+		.map(validateAndSanitizeResult)
+		.filter((r): r is HLTBSearchResult => r !== null)
+		.slice(0, 10);
 }
 
 export async function searchGames(query: string): Promise<HLTBSearchResult[]> {
-	try {
-		const sanitizedQuery = sanitizeString(query);
+	const sanitizedQuery = sanitizeString(query);
+	if (!sanitizedQuery || sanitizedQuery.length < 2) return [];
 
-		if (!sanitizedQuery || sanitizedQuery.length < 2) {
-			return [];
-		}
+	const errors: string[] = [];
 
-		let { searchPath, authToken, hpKey, hpVal } = await ensureEndpointAndToken();
-
-		let rawResults: any[];
+	// Attempt 1: cached session (if still fresh)
+	if (isSessionValid(cachedSession)) {
 		try {
-			rawResults = await executeSearch(searchPath, authToken, hpKey, hpVal, sanitizedQuery);
-		} catch {
-			// If search fails, invalidate cache and retry once with a fresh endpoint/token.
-			// A short delay helps avoid immediate re-rejection from HLTB rate limiting.
-			invalidateCache();
-			await new Promise((resolve) => setTimeout(resolve, 800));
-			({ searchPath, authToken, hpKey, hpVal } = await ensureEndpointAndToken());
-			rawResults = await executeSearch(searchPath, authToken, hpKey, hpVal, sanitizedQuery);
+			return await trySearch(cachedSession, sanitizedQuery);
+		} catch (e) {
+			errors.push(`cached: ${e instanceof Error ? e.message : 'unknown'}`);
+			cachedSession = null;
 		}
-
-		const sanitizedResults = rawResults
-			.map(validateAndSanitizeResult)
-			.filter((r): r is HLTBSearchResult => r !== null)
-			.slice(0, 10);
-
-		return sanitizedResults;
-	} catch (error) {
-		console.error('HLTB search error:', error);
-		throw new Error('Failed to search games. Please try manual entry.');
 	}
+
+	// Attempt 2: fresh session via endpoint discovery
+	try {
+		cachedSession = await newSession();
+		return await trySearch(cachedSession, sanitizedQuery);
+	} catch (e) {
+		errors.push(`fresh: ${e instanceof Error ? e.message : 'unknown'}`);
+		cachedSession = null;
+	}
+
+	// Attempt 3: try each known endpoint with its own fresh session
+	for (const path of KNOWN_SEARCH_ENDPOINTS) {
+		try {
+			await new Promise((resolve) => setTimeout(resolve, 400));
+			const session = await newSession(path);
+			const results = await trySearch(session, sanitizedQuery);
+			cachedSession = session;
+			return results;
+		} catch (e) {
+			errors.push(`${path}: ${e instanceof Error ? e.message : 'unknown'}`);
+		}
+	}
+
+	console.error('HLTB search failed after all attempts:', errors.join(' | '));
+	throw new Error('Search temporarily unavailable. Please try again or add manually.');
 }
