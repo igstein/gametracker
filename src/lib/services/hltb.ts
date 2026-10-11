@@ -12,8 +12,8 @@ function randomUserAgent(): string {
 	return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
-const KNOWN_SEARCH_ENDPOINTS = ['/api/find', '/api/search'];
-const FALLBACK_SEARCH_PATH = '/api/find';
+const KNOWN_SEARCH_ENDPOINTS = ['/api/search/site', '/api/find', '/api/search'];
+const FALLBACK_SEARCH_PATH = '/api/search/site';
 const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes — HLTB tokens are short-lived
 
 /**
@@ -75,14 +75,20 @@ async function discoverSearchEndpoint(userAgent: string): Promise<string> {
 
 		const scriptText = await scriptRes.text();
 
-		const knownMatch = /["'`]\/api\/(find|search)(?:\/[a-zA-Z0-9_/]*)?["'`]/i.exec(scriptText);
-		if (knownMatch) return `/api/${knownMatch[1]}`;
+		// Most robust signal: the app fetches `{searchPath}/init?t=...` to get a token.
+		// Capture the base path directly from that call (e.g. /api/search/site/init -> /api/search/site).
+		const initMatch = /["'`](\/api\/[a-zA-Z0-9_/]*?)\/init\?/i.exec(scriptText);
+		if (initMatch) return initMatch[1];
 
-		const fetchMatch = /fetch\s*\(\s*["'`]\/api\/([a-zA-Z][a-zA-Z0-9_]*)["'`]/i.exec(scriptText);
+		// Fallback: a quoted search path, capturing any sub-segments (e.g. /api/search/site).
+		const knownMatch = /["'`](\/api\/(?:find|search)(?:\/[a-zA-Z0-9_]+)*)["'`]/i.exec(scriptText);
+		if (knownMatch) return knownMatch[1];
+
+		const fetchMatch = /fetch\s*\(\s*["'`](\/api\/[a-zA-Z][a-zA-Z0-9_/]*)["'`]/i.exec(scriptText);
 		if (fetchMatch) {
 			const path = fetchMatch[1];
-			const nonSearch = ['user', 'auth', 'login', 'profile', 'settings', 'upload'];
-			if (!nonSearch.includes(path)) return `/api/${path}`;
+			const nonSearch = ['/api/user', '/api/auth', '/api/login', '/api/profile', '/api/settings', '/api/upload'];
+			if (!nonSearch.some((p) => path === p || path.startsWith(p + '/'))) return path;
 		}
 	}
 
