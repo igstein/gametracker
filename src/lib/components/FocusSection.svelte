@@ -26,10 +26,13 @@
 		.map((id) => games.find((g) => g.id === id))
 		.filter((g): g is Game => g !== undefined);
 
-	// Games available to pick: Playing or Backlog, not wishlist
-	$: pickableGames = games.filter(
-		(g) => g.status === 'playing' || g.status === 'backlog'
-	);
+	// Games available to pick: Playing first, then Backlog, each alphabetical
+	$: pickableGames = games
+		.filter((g) => g.status === 'playing' || g.status === 'backlog')
+		.sort((a, b) => {
+			if (a.status !== b.status) return a.status === 'playing' ? -1 : 1;
+			return a.title.localeCompare(b.title);
+		});
 
 	function loadFocus() {
 		if (!browser) return;
@@ -187,7 +190,7 @@
 		role="button"
 		tabindex="-1"
 	>
-		<div class="bg-gray-800 rounded-lg max-w-lg w-full p-6 max-h-[80vh] flex flex-col">
+		<div class="bg-gray-800 rounded-lg max-w-lg w-full p-6 max-h-[80vh] flex flex-col overflow-hidden">
 			<div class="flex items-center justify-between mb-1">
 				<h2 class="text-xl font-bold text-white">Set Focus Games</h2>
 				<button on:click={() => (showPicker = false)} class="text-gray-400 hover:text-white text-2xl leading-none">×</button>
@@ -199,7 +202,7 @@
 					You need at least 3 games in Playing or Backlog to set a focus week.
 				</p>
 			{:else}
-				<div class="overflow-y-auto flex-1 space-y-2 pr-1">
+				<div class="overflow-y-auto flex-1 min-h-0 space-y-2 pr-1">
 					{#each pickableGames as game (game.id)}
 						{@const selected = pickerSelected.includes(game.id)}
 						{@const target = getTargetHours(game)}
