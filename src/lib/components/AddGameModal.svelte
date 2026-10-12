@@ -83,9 +83,16 @@
 		searchError = '';
 
 		try {
+			const {
+				data: { session }
+			} = await $page.data.supabase.auth.getSession();
+
 			const response = await fetch('/api/hltb/search', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session?.access_token ?? ''}`
+				},
 				body: JSON.stringify({ query: query.trim() })
 			});
 
@@ -180,16 +187,12 @@
 				finalCoverUrl = coverImageUrl.trim();
 			}
 
-			const mainStory = targetHours * 0.85;
-			const mainPlusExtras = targetHours * 1.15;
-
 			const { error: insertError } = await $page.data.supabase.from('games').insert({
 				user_id: $page.data.user.id,
 				title: title.trim(),
 				cover_image_url: finalCoverUrl,
 				played_hours: playedHours,
-				main_story_hours: mainStory,
-				main_plus_extras_hours: mainPlusExtras,
+				custom_target_hours: targetHours,
 				status,
 				priority
 			});
@@ -305,7 +308,9 @@
 									<div class="text-xs text-gray-400 space-y-0.5">
 										<p>Main Story: {result.mainStoryHours}h</p>
 										<p>Main + Extras: {result.mainPlusExtrasHours}h</p>
-										<p>Target: ~{result.targetHours}h</p>
+										{#if result.targetHours > 0}
+											<p>Target: ~{result.targetHours}h</p>
+										{/if}
 									</div>
 								</div>
 								<div class="flex flex-col gap-1.5 self-center flex-shrink-0">
@@ -451,8 +456,8 @@
 									src={coverImageUrl}
 									alt="Cover preview"
 									class="mt-2 w-20 h-28 object-cover rounded"
-									on:error={(e) => { e.currentTarget.style.display = 'none'; }}
-									on:load={(e) => { e.currentTarget.style.display = 'block'; }}
+									on:error={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+									on:load={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'block'; }}
 								/>
 							{/if}
 						{/if}

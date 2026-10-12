@@ -73,6 +73,23 @@ export async function saveGamesToLocal(games: Game[]): Promise<void> {
 	});
 }
 
+// Replace the whole local games cache, so games deleted elsewhere don't linger
+export async function replaceGamesInLocal(games: Game[]): Promise<void> {
+	const database = await initDB();
+	const tx = database.transaction(GAMES_STORE, 'readwrite');
+	const store = tx.objectStore(GAMES_STORE);
+
+	store.clear();
+	for (const game of games) {
+		store.put(game);
+	}
+
+	return new Promise((resolve, reject) => {
+		tx.oncomplete = () => resolve();
+		tx.onerror = () => reject(tx.error);
+	});
+}
+
 export async function getGamesFromLocal(): Promise<Game[]> {
 	const database = await initDB();
 	const tx = database.transaction(GAMES_STORE, 'readonly');
@@ -214,5 +231,19 @@ export async function clearSyncQueue(): Promise<void> {
 		const request = store.clear();
 		request.onsuccess = () => resolve();
 		request.onerror = () => reject(request.error);
+	});
+}
+
+// Wipe cached games and notes (used on sign-out so the next user doesn't see them).
+// The sync queue is kept so unsynced offline changes aren't lost.
+export async function clearLocalData(): Promise<void> {
+	const database = await initDB();
+	const tx = database.transaction([GAMES_STORE, NOTES_STORE], 'readwrite');
+	tx.objectStore(GAMES_STORE).clear();
+	tx.objectStore(NOTES_STORE).clear();
+
+	return new Promise((resolve, reject) => {
+		tx.oncomplete = () => resolve();
+		tx.onerror = () => reject(tx.error);
 	});
 }

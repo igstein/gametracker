@@ -6,20 +6,13 @@
 	export let game: Game;
 	export let onClick: () => void;
 
-	const targetHours = getTargetHours(game);
+	$: targetHours = getTargetHours(game);
 
-	const progress = targetHours > 0 ? Math.min(100, (game.played_hours / targetHours) * 100) : -1;
+	$: progress = targetHours > 0 ? Math.min(100, (game.played_hours / targetHours) * 100) : -1;
 
-	let progressColor = '';
-	if (progress < 30) {
-		progressColor = 'bg-red-500';
-	} else if (progress < 70) {
-		progressColor = 'bg-yellow-500';
-	} else {
-		progressColor = 'bg-green-500';
-	}
+	$: progressColor = progress < 30 ? 'bg-red-500' : progress < 70 ? 'bg-yellow-500' : 'bg-green-500';
 
-	const priority = PRIORITY_CONFIG[game.priority];
+	$: priority = PRIORITY_CONFIG[game.priority];
 </script>
 
 <div

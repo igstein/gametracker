@@ -16,7 +16,7 @@
 	import { allGames } from '$lib/stores/games';
 	import {
 		initDB,
-		saveGamesToLocal,
+		replaceGamesInLocal,
 		getGamesFromLocal,
 		saveGameToLocal,
 		deleteGameFromLocal,
@@ -187,7 +187,7 @@
 				if (loadError) throw loadError;
 
 				games = gamesData || [];
-				await saveGamesToLocal(games);
+				await replaceGamesInLocal(games);
 			} else {
 				console.log('[Offline] Loading games from local cache');
 				games = await getGamesFromLocal();
@@ -211,32 +211,30 @@
 		}
 	}
 
+	let syncing = false;
+
 	async function processSyncQueue() {
-		if (!$isOnline) return;
+		if (!$isOnline || syncing) return;
+		syncing = true;
 
 		try {
 			const queue = await getSyncQueue();
+			if (queue.length === 0) return;
 			console.log(`[Sync] Processing ${queue.length} queued operations`);
 
 			for (const item of queue) {
 				try {
-					if (item.table === 'games') {
-						if (item.operation === 'insert') {
-							await supabase.from('games').insert(item.data);
-						} else if (item.operation === 'update') {
-							await supabase.from('games').update(item.data).eq('id', item.data.id);
-						} else if (item.operation === 'delete') {
-							await supabase.from('games').delete().eq('id', item.data.id);
-						}
-					} else if (item.table === 'game_notes') {
-						if (item.operation === 'insert') {
-							await supabase.from('game_notes').insert(item.data);
-						} else if (item.operation === 'update') {
-							await supabase.from('game_notes').update(item.data).eq('id', item.data.id);
-						} else if (item.operation === 'delete') {
-							await supabase.from('game_notes').delete().eq('id', item.data.id);
-						}
+					const table = supabase.from(item.table);
+					let result;
+					if (item.operation === 'insert') {
+						result = await table.insert(item.data);
+					} else if (item.operation === 'update') {
+						result = await table.update(item.data).eq('id', item.data.id);
+					} else {
+						result = await table.delete().eq('id', item.data.id);
 					}
+					// Supabase reports failures via `error`, it doesn't throw
+					if (result.error) throw result.error;
 
 					// Remove from queue after successful sync
 					await removeFromSyncQueue(item.id);
@@ -251,6 +249,8 @@
 			await loadGames();
 		} catch (e) {
 			console.error('[Sync] Failed to process queue:', e);
+		} finally {
+			syncing = false;
 		}
 	}
 
@@ -290,7 +290,10 @@
 					if (payload.eventType === 'INSERT') {
 						// New game added from another device
 						const newGame = payload.new as Game;
-						games = [newGame, ...games];
+						// Skip if a reload already picked it up (avoids duplicate keys)
+						if (!games.some((g) => g.id === newGame.id)) {
+							games = [newGame, ...games];
+						}
 					} else if (payload.eventType === 'UPDATE') {
 						// Game updated from another device
 						const updatedGame = payload.new as Game;
@@ -327,11 +330,6 @@
 
 		loadGames();
 		setupRealtimeSubscription();
-
-		// Process any pending sync queue items
-		if ($isOnline) {
-			processSyncQueue();
-		}
 
 		// Register callback for when games are added
 		if (registerCallback) {

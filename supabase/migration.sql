@@ -14,17 +14,27 @@ CREATE TABLE games (
     main_plus_extras_hours DECIMAL,
     completionist_hours DECIMAL,
 
-    -- Custom target override (if set, used instead of HLTB average)
+    -- Custom target override (if set, used instead of the HLTB-based target)
     custom_target_hours DECIMAL,
 
     played_hours DECIMAL NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'backlog'
-        CHECK (status IN ('playing', 'backlog', 'finished', 'abandoned')),
+        CHECK (status IN ('playing', 'backlog', 'finished', 'abandoned', 'wishlist')),
     priority TEXT NOT NULL DEFAULT 'medium'
         CHECK (priority IN ('must_play', 'high', 'medium', 'low')),
 
     date_added TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_played TIMESTAMPTZ,
+
+    -- Tags (used for filtering and Next Up mood scoring)
+    genre TEXT[],
+    platform TEXT[],
+    devices TEXT[],
+    setting TEXT[],
+
+    -- Game guide
+    guide_url TEXT,
+    guide_text TEXT,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -34,7 +44,7 @@ CREATE TABLE games (
 CREATE TABLE game_notes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     game_id UUID REFERENCES games(id) ON DELETE CASCADE NOT NULL,
-    user_id UUID REFERENCES auth.users(id) NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     title TEXT,
     content TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -44,11 +54,11 @@ CREATE TABLE game_notes (
 -- Row Level Security: users can only access their own data
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own games" ON games
-    FOR ALL USING (auth.uid() = user_id);
+    FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 ALTER TABLE game_notes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own notes" ON game_notes
-    FOR ALL USING (auth.uid() = user_id);
+    FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- Storage bucket for cover images
 INSERT INTO storage.buckets (id, name, public)

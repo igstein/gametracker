@@ -6,8 +6,8 @@
 	export let game: Game;
 	export let onClick: () => void;
 
-	const targetHours = getTargetHours(game);
-	const priority = PRIORITY_CONFIG[game.priority];
+	$: targetHours = getTargetHours(game);
+	$: priority = PRIORITY_CONFIG[game.priority];
 
 	$: mainHours = game.main_story_hours ? Math.round(game.main_story_hours) : null;
 	$: extrasHours = game.main_plus_extras_hours ? Math.round(game.main_plus_extras_hours) : null;

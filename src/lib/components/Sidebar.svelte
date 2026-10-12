@@ -3,6 +3,7 @@
 	import { theme, toggleTheme } from '$lib/stores/theme';
 	import { PRIORITY_CONFIG, STATUS_CONFIG } from '$lib/constants';
 	import type { GamePriority, GameStatus } from '$lib/types';
+	import { clearLocalData } from '$lib/services/offline';
 
 	export let onAddGame: () => void;
 	export let onFilterChange: (filter: string) => void;
@@ -49,6 +50,11 @@
 	}
 
 	async function handleSignOut() {
+		try {
+			await clearLocalData();
+		} catch (e) {
+			console.error('Failed to clear local cache:', e);
+		}
 		await $page.data.supabase.auth.signOut();
 	}
 

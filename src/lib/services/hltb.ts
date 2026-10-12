@@ -210,14 +210,8 @@ function validateAndSanitizeResult(entry: any): HLTBSearchResult | null {
 		const mainPlusExtrasHours = sanitizeNumber(entry.comp_plus) / 3600;
 		const completionistHours = sanitizeNumber(entry.comp_100) / 3600;
 
-		const targetHours =
-			mainStoryHours > 0 && mainPlusExtrasHours > 0
-				? (mainStoryHours + mainPlusExtrasHours) / 2
-				: mainStoryHours > 0
-					? mainStoryHours
-					: mainPlusExtrasHours > 0
-						? mainPlusExtrasHours
-						: 50;
+		// Same formula as getTargetHours: Main + Extras × 1.2, falling back to Main Story × 1.2
+		const targetHours = (mainPlusExtrasHours || mainStoryHours) * 1.2;
 
 		return {
 			id,
