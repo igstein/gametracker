@@ -51,6 +51,17 @@ CREATE TABLE game_notes (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Focus weeks: one row per focus week (history); active = newest, not cleared, set within 7 days
+CREATE TABLE focus_weeks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL DEFAULT auth.uid(),
+    game_ids UUID[] NOT NULL,
+    set_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    cleared_at TIMESTAMPTZ
+);
+
+CREATE INDEX focus_weeks_user_set_at_idx ON focus_weeks (user_id, set_at DESC);
+
 -- Row Level Security: users can only access their own data
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own games" ON games
@@ -58,6 +69,10 @@ CREATE POLICY "Users manage own games" ON games
 
 ALTER TABLE game_notes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own notes" ON game_notes
+    FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+ALTER TABLE focus_weeks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own focus weeks" ON focus_weeks
     FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- Storage bucket for cover images
@@ -83,3 +98,4 @@ CREATE POLICY "Users delete own covers" ON storage.objects
 -- Enable Realtime for cross-device sync
 ALTER PUBLICATION supabase_realtime ADD TABLE games;
 ALTER PUBLICATION supabase_realtime ADD TABLE game_notes;
+ALTER PUBLICATION supabase_realtime ADD TABLE focus_weeks;

@@ -1,6 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
+	import type { RealtimeChannel } from '@supabase/supabase-js';
+	import { isOnline } from '$lib/stores/network';
 	import type { Game } from '$lib/types';
 	import { getTargetHours } from '$lib/utils';
 	import { PRIORITY_CONFIG, STATUS_CONFIG } from '$lib/constants';
@@ -8,14 +11,30 @@
 	export let games: Game[] = [];
 	export let onOpenGame: (game: Game) => void;
 
-	const STORAGE_KEY = 'gametracker_focus';
+	const LEGACY_STORAGE_KEY = 'gametracker_focus';
 	const LOCK_MS = 7 * 24 * 60 * 60 * 1000;
 
+	interface FocusWeekRow {
+		id: string;
+		game_ids: string[];
+		set_at: string;
+		cleared_at: string | null;
+	}
+
+	$: supabase = $page.data.supabase;
+	$: userId = $page.data.user?.id as string | undefined;
+	// Offline cache only — Supabase is the source of truth
+	$: cacheKey = userId ? `gametracker_focus_${userId}` : null;
+
+	let focusId: string | null = null;
 	let focusGameIds: string[] = [];
 	let setAt: string | null = null;
 	let showPicker = false;
 	let pickerSelected: string[] = [];
 	let confirmingReset = false;
+	let saving = false;
+	let saveError = '';
+	let channel: RealtimeChannel | null = null;
 
 	$: locked = setAt !== null && Date.now() - new Date(setAt).getTime() < LOCK_MS;
 	$: daysLeft = setAt
@@ -34,32 +53,96 @@
 			return a.title.localeCompare(b.title);
 		});
 
-	function loadFocus() {
-		if (!browser) return;
-		const stored = localStorage.getItem(STORAGE_KEY);
-		if (!stored) return;
+	function applyFocus(row: FocusWeekRow | null) {
+		const active = row && !row.cleared_at ? row : null;
+		focusId = active?.id ?? null;
+		focusGameIds = active?.game_ids ?? [];
+		setAt = active?.set_at ?? null;
+		if (!cacheKey) return;
+		if (active) localStorage.setItem(cacheKey, JSON.stringify(active));
+		else localStorage.removeItem(cacheKey);
+	}
+
+	function loadFromCache() {
+		if (!cacheKey) return;
 		try {
-			const data = JSON.parse(stored);
-			focusGameIds = data.gameIds ?? [];
-			setAt = data.setAt ?? null;
+			const stored = localStorage.getItem(cacheKey);
+			if (stored) applyFocus(JSON.parse(stored));
 		} catch {
-			localStorage.removeItem(STORAGE_KEY);
+			localStorage.removeItem(cacheKey);
 		}
 	}
 
-	function saveFocus(ids: string[]) {
-		if (!browser) return;
-		const now = new Date().toISOString();
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({ gameIds: ids, setAt: now }));
-		focusGameIds = ids;
-		setAt = now;
+	// Move a focus week saved by the old localStorage-only version into Supabase
+	async function migrateLegacyFocus(): Promise<FocusWeekRow | null> {
+		const stored = localStorage.getItem(LEGACY_STORAGE_KEY);
+		if (!stored) return null;
+		try {
+			const legacy = JSON.parse(stored);
+			if (
+				!Array.isArray(legacy.gameIds) ||
+				!legacy.setAt ||
+				Date.now() - new Date(legacy.setAt).getTime() >= LOCK_MS
+			) {
+				localStorage.removeItem(LEGACY_STORAGE_KEY);
+				return null;
+			}
+			const { data, error } = await supabase
+				.from('focus_weeks')
+				.insert({ game_ids: legacy.gameIds, set_at: legacy.setAt })
+				.select()
+				.single();
+			if (error) throw error;
+			// Only drop the old copy once it's safely in Supabase
+			localStorage.removeItem(LEGACY_STORAGE_KEY);
+			return data as FocusWeekRow;
+		} catch (e) {
+			console.error('[Focus] Failed to migrate local focus week:', e);
+			return null;
+		}
 	}
 
-	function clearFocus() {
-		if (!browser) return;
-		localStorage.removeItem(STORAGE_KEY);
-		focusGameIds = [];
-		setAt = null;
+	async function fetchFocus() {
+		if (!$isOnline || !userId) return;
+		const { data, error } = await supabase
+			.from('focus_weeks')
+			.select('id, game_ids, set_at, cleared_at')
+			.order('set_at', { ascending: false })
+			.limit(1)
+			.maybeSingle();
+		if (error) {
+			console.error('[Focus] Failed to load focus week:', error);
+			return;
+		}
+		applyFocus((data as FocusWeekRow | null) ?? (await migrateLegacyFocus()));
+	}
+
+	async function saveFocus(ids: string[]) {
+		const { data, error } = await supabase
+			.from('focus_weeks')
+			.insert({ game_ids: ids })
+			.select()
+			.single();
+		if (error) throw error;
+		applyFocus(data as FocusWeekRow);
+	}
+
+	async function clearFocus() {
+		if (!focusId) return;
+		if (!$isOnline) {
+			saveError = "You're offline — reset needs a connection.";
+			confirmingReset = false;
+			return;
+		}
+		const { error } = await supabase
+			.from('focus_weeks')
+			.update({ cleared_at: new Date().toISOString() })
+			.eq('id', focusId);
+		if (error) {
+			saveError = error.message;
+		} else {
+			applyFocus(null);
+		}
 		confirmingReset = false;
 	}
 
@@ -76,16 +159,45 @@
 
 	function openPicker() {
 		pickerSelected = [...focusGameIds];
+		saveError = '';
 		showPicker = true;
 	}
 
-	function confirmPicker() {
-		if (pickerSelected.length !== 3) return;
-		saveFocus(pickerSelected);
-		showPicker = false;
+	async function confirmPicker() {
+		if (pickerSelected.length !== 3 || saving) return;
+		if (!$isOnline) {
+			saveError = "You're offline — setting a focus week needs a connection.";
+			return;
+		}
+		saving = true;
+		saveError = '';
+		try {
+			await saveFocus(pickerSelected);
+			showPicker = false;
+		} catch (e) {
+			saveError = e instanceof Error ? e.message : 'Failed to save focus week';
+		} finally {
+			saving = false;
+		}
 	}
 
-	onMount(loadFocus);
+	// Refetch when coming back online
+	$: if (browser && $isOnline && userId) fetchFocus();
+
+	onMount(() => {
+		loadFromCache();
+		// Pick up focus weeks set or reset on other devices
+		channel = supabase
+			.channel('focus-weeks-changes')
+			.on('postgres_changes', { event: '*', schema: 'public', table: 'focus_weeks' }, () =>
+				fetchFocus()
+			)
+			.subscribe();
+	});
+
+	onDestroy(() => {
+		if (channel) supabase.removeChannel(channel);
+	});
 </script>
 
 <div class="mb-8">
@@ -110,6 +222,9 @@
 					<button on:click={() => (confirmingReset = false)} class="underline hover:text-gray-300 ml-1">No</button>
 				</span>
 			{/if}
+		{/if}
+		{#if saveError && !showPicker}
+			<span class="text-[10px] text-red-400">{saveError}</span>
 		{/if}
 	</div>
 
@@ -237,6 +352,10 @@
 					{/each}
 				</div>
 
+				{#if saveError}
+					<p class="mt-3 text-red-400 text-sm">{saveError}</p>
+				{/if}
+
 				<div class="mt-4 flex items-center justify-between">
 					<span class="text-gray-400 text-sm">{pickerSelected.length} / 3 selected</span>
 					<div class="flex gap-2">
@@ -250,10 +369,10 @@
 						<button
 							type="button"
 							on:click={confirmPicker}
-							disabled={pickerSelected.length !== 3}
+							disabled={pickerSelected.length !== 3 || saving}
 							class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
 						>
-							Confirm ({pickerSelected.length}/3)
+							{saving ? 'Saving…' : `Confirm (${pickerSelected.length}/3)`}
 						</button>
 					</div>
 				</div>
