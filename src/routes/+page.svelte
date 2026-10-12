@@ -7,6 +7,7 @@
 	import GameDetailModal from '$lib/components/GameDetailModal.svelte';
 	import FocusSection from '$lib/components/FocusSection.svelte';
 	import NextUpSection from '$lib/components/NextUpSection.svelte';
+	import RealityCheckSection from '$lib/components/RealityCheckSection.svelte';
 	import type { Game } from '$lib/types';
 	import { getTargetHours } from '$lib/utils';
 	import { PRIORITY_ORDER } from '$lib/constants';
@@ -480,6 +481,7 @@
 
 	{#if !loading && !isWishlistView}
 		<NextUpSection games={libraryGames} onOpenGame={openGameDetail} />
+		<RealityCheckSection {games} />
 	{/if}
 
 	{#if isWishlistView}
