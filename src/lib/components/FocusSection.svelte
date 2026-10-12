@@ -4,12 +4,14 @@
 	import { page } from '$app/stores';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import { isOnline } from '$lib/stores/network';
+	import QuickAddButton from './QuickAddButton.svelte';
 	import type { Game } from '$lib/types';
 	import { getTargetHours } from '$lib/utils';
 	import { PRIORITY_CONFIG, STATUS_CONFIG } from '$lib/constants';
 
 	export let games: Game[] = [];
 	export let onOpenGame: (game: Game) => void;
+	export let onQuickAdd: (game: Game) => void;
 
 	const LEGACY_STORAGE_KEY = 'gametracker_focus';
 	const LOCK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -271,6 +273,11 @@
 							</div>
 						{:else}
 							<p class="text-[9px] text-amber-500">No target set</p>
+						{/if}
+						{#if game.status === 'playing' || game.status === 'backlog'}
+							<div class="mt-1.5 flex justify-end">
+								<QuickAddButton size="xs" onAdd={() => onQuickAdd(game)} />
+							</div>
 						{/if}
 					</div>
 				</div>

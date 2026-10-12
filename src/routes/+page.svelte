@@ -21,7 +21,8 @@
 		saveGameToLocal,
 		deleteGameFromLocal,
 		getSyncQueue,
-		removeFromSyncQueue
+		removeFromSyncQueue,
+		addToSyncQueue
 	} from '$lib/services/offline';
 
 	let games: Game[] = [];
@@ -273,6 +274,91 @@
 		loadGames();
 	}
 
+	// Quick +1h: optimistic update, saved in the background, undoable via toast
+	interface QuickAddToast {
+		gameId: string;
+		title: string;
+		hours: number;
+		original: Game; // state before the first tap, restored on undo
+		error?: string;
+	}
+	let quickAddToast: QuickAddToast | null = null;
+	let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function showToast(toast: QuickAddToast) {
+		quickAddToast = toast;
+		if (toastTimer) clearTimeout(toastTimer);
+		toastTimer = setTimeout(() => (quickAddToast = null), 5000);
+	}
+
+	// Applies new playtime locally, then saves it (or queues it when offline).
+	// Rolls back to `revertTo` if saving fails.
+	// Realtime echoes of our own quick-add saves can arrive out of order; ignore them briefly
+	const recentLocalWrites = new Map<string, number>();
+	const ECHO_IGNORE_MS = 2000;
+
+	async function savePlaytime(updated: Game, revertTo: Game): Promise<boolean> {
+		recentLocalWrites.set(updated.id, Date.now());
+		games = games.map((g) => (g.id === updated.id ? updated : g));
+		const changes = {
+			played_hours: updated.played_hours,
+			last_played: updated.last_played ?? null
+		};
+		try {
+			if ($isOnline) {
+				const { error: updateError } = await supabase
+					.from('games')
+					.update(changes)
+					.eq('id', updated.id);
+				if (updateError) throw updateError;
+			} else {
+				await addToSyncQueue({
+					operation: 'update',
+					table: 'games',
+					data: { id: updated.id, ...changes }
+				});
+			}
+			await saveGameToLocal(updated);
+			return true;
+		} catch (e) {
+			console.error('[QuickAdd] Failed to save playtime:', e);
+			games = games.map((g) => (g.id === revertTo.id ? revertTo : g));
+			showToast({
+				gameId: updated.id,
+				title: updated.title,
+				hours: 0,
+				original: revertTo,
+				error: e instanceof Error ? e.message : 'Failed to save'
+			});
+			return false;
+		}
+	}
+
+	async function quickAddHour(game: Game) {
+		const current = games.find((g) => g.id === game.id) ?? game;
+		const updated = {
+			...current,
+			played_hours: current.played_hours + 1,
+			last_played: new Date().toISOString()
+		};
+		// Repeated taps on the same game add up into one undoable toast
+		const sameGame = quickAddToast && !quickAddToast.error && quickAddToast.gameId === game.id;
+		const original = sameGame ? quickAddToast!.original : current;
+		const hours = sameGame ? quickAddToast!.hours + 1 : 1;
+
+		if (await savePlaytime(updated, current)) {
+			showToast({ gameId: game.id, title: game.title, hours, original });
+		}
+	}
+
+	async function undoQuickAdd() {
+		if (!quickAddToast || quickAddToast.error) return;
+		const { gameId, original } = quickAddToast;
+		quickAddToast = null;
+		const current = games.find((g) => g.id === gameId);
+		if (current) await savePlaytime(original, current);
+	}
+
 	function setupRealtimeSubscription() {
 		// Create a channel for games table
 		realtimeChannel = supabase
@@ -297,6 +383,8 @@
 					} else if (payload.eventType === 'UPDATE') {
 						// Game updated from another device
 						const updatedGame = payload.new as Game;
+						const lastLocalWrite = recentLocalWrites.get(updatedGame.id);
+						if (lastLocalWrite && Date.now() - lastLocalWrite < ECHO_IGNORE_MS) return;
 						games = games.map((g) => (g.id === updatedGame.id ? updatedGame : g));
 						// Update selected game if it's open
 						if (selectedGame && selectedGame.id === updatedGame.id) {
@@ -338,6 +426,7 @@
 	});
 
 	onDestroy(() => {
+		if (toastTimer) clearTimeout(toastTimer);
 		// Clean up Realtime subscription
 		if (realtimeChannel) {
 			supabase.removeChannel(realtimeChannel);
@@ -370,8 +459,23 @@
 		</div>
 	{/if}
 
+	{#if quickAddToast}
+		<div
+			class="fixed left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-lg shadow-lg text-sm bg-gray-900 text-white dark:bg-gray-700"
+			style="bottom: calc(4rem + env(safe-area-inset-bottom, 0px))"
+			role="status"
+		>
+			{#if quickAddToast.error}
+				<span class="text-red-300">Couldn't save playtime for {quickAddToast.title}: {quickAddToast.error}</span>
+			{:else}
+				<span>+{quickAddToast.hours}h <span class="font-semibold">{quickAddToast.title}</span></span>
+				<button on:click={undoQuickAdd} class="text-blue-300 hover:text-blue-200 font-medium">Undo</button>
+			{/if}
+		</div>
+	{/if}
+
 	{#if !loading && !isWishlistView}
-		<FocusSection {games} onOpenGame={openGameDetail} />
+		<FocusSection {games} onOpenGame={openGameDetail} onQuickAdd={quickAddHour} />
 	{/if}
 
 	{#if !loading && !isWishlistView}
@@ -481,7 +585,7 @@
 		{:else if filteredAndSortedGames.length > 0}
 			<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-[1800px]">
 				{#each filteredAndSortedGames as game (game.id)}
-					<GameCard {game} onClick={() => openGameDetail(game)} />
+					<GameCard {game} onClick={() => openGameDetail(game)} onQuickAdd={quickAddHour} />
 				{/each}
 			</div>
 		{:else if libraryGames.length > 0}

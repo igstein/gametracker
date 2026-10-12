@@ -2,9 +2,13 @@
 	import type { Game } from '$lib/types';
 	import { getTargetHours } from '$lib/utils';
 	import { PRIORITY_CONFIG } from '$lib/constants';
+	import QuickAddButton from './QuickAddButton.svelte';
 
 	export let game: Game;
 	export let onClick: () => void;
+	export let onQuickAdd: ((game: Game) => void) | null = null;
+
+	$: canQuickAdd = onQuickAdd !== null && (game.status === 'playing' || game.status === 'backlog');
 
 	$: targetHours = getTargetHours(game);
 
@@ -54,13 +58,23 @@
 			<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
 				<div class="{progressColor} h-full transition-all" style="width: {progress}%"></div>
 			</div>
-			<div class="flex justify-between text-[10px] text-gray-600 dark:text-gray-400">
+			<div class="flex justify-between items-center gap-1 text-[10px] text-gray-600 dark:text-gray-400">
 				<span>{Math.round(game.played_hours * 10) / 10}h / {targetHours.toFixed(0)}h</span>
-				<span>{progress.toFixed(0)}%</span>
+				<span class="flex items-center gap-1.5">
+					{progress.toFixed(0)}%
+					{#if canQuickAdd && onQuickAdd}
+						<QuickAddButton onAdd={() => onQuickAdd?.(game)} />
+					{/if}
+				</span>
 			</div>
 		</div>
 		{:else}
-		<p class="text-[10px] text-amber-500 dark:text-amber-400">Set target time</p>
+		<div class="flex justify-between items-center gap-1">
+			<p class="text-[10px] text-amber-500 dark:text-amber-400">Set target time</p>
+			{#if canQuickAdd && onQuickAdd}
+				<QuickAddButton onAdd={() => onQuickAdd?.(game)} />
+			{/if}
+		</div>
 		{/if}
 	</div>
 </div>
