@@ -114,3 +114,17 @@ export function getMostRecentGenres(games: Game[]): string[] {
 		)[0];
 	return recent?.genre ?? [];
 }
+
+export const COLD_AFTER_DAYS = 30;
+
+/**
+ * Days since a Playing game was last played (or added, if never played),
+ * or null if it isn't Playing or hasn't gone cold yet.
+ */
+export function getColdDays(game: Game): number | null {
+	if (game.status !== 'playing') return null;
+	const since = game.last_played ?? game.date_added;
+	if (!since) return null;
+	const days = Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000);
+	return days >= COLD_AFTER_DAYS ? days : null;
+}

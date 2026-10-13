@@ -8,6 +8,7 @@
 	import FocusSection from '$lib/components/FocusSection.svelte';
 	import NextUpSection from '$lib/components/NextUpSection.svelte';
 	import RealityCheckSection from '$lib/components/RealityCheckSection.svelte';
+	import GoneColdNudge from '$lib/components/GoneColdNudge.svelte';
 	import type { Game } from '$lib/types';
 	import { getTargetHours } from '$lib/utils';
 	import { PRIORITY_ORDER } from '$lib/constants';
@@ -292,19 +293,20 @@
 		toastTimer = setTimeout(() => (quickAddToast = null), 5000);
 	}
 
-	// Applies new playtime locally, then saves it (or queues it when offline).
-	// Rolls back to `revertTo` if saving fails.
-	// Realtime echoes of our own quick-add saves can arrive out of order; ignore them briefly
+	// Realtime echoes of our own quick saves can arrive out of order; ignore them briefly
 	const recentLocalWrites = new Map<string, number>();
 	const ECHO_IGNORE_MS = 2000;
 
-	async function savePlaytime(updated: Game, revertTo: Game): Promise<boolean> {
+	// Applies the given fields locally, then saves them (or queues them when offline).
+	// Rolls back to `revertTo` if saving fails.
+	async function saveGameFields(
+		updated: Game,
+		revertTo: Game,
+		fields: (keyof Game)[]
+	): Promise<boolean> {
 		recentLocalWrites.set(updated.id, Date.now());
 		games = games.map((g) => (g.id === updated.id ? updated : g));
-		const changes = {
-			played_hours: updated.played_hours,
-			last_played: updated.last_played ?? null
-		};
+		const changes = Object.fromEntries(fields.map((f) => [f, updated[f] ?? null]));
 		try {
 			if ($isOnline) {
 				const { error: updateError } = await supabase
@@ -322,7 +324,7 @@
 			await saveGameToLocal(updated);
 			return true;
 		} catch (e) {
-			console.error('[QuickAdd] Failed to save playtime:', e);
+			console.error('[QuickSave] Failed to save game:', e);
 			games = games.map((g) => (g.id === revertTo.id ? revertTo : g));
 			showToast({
 				gameId: updated.id,
@@ -333,6 +335,15 @@
 			});
 			return false;
 		}
+	}
+
+	function savePlaytime(updated: Game, revertTo: Game) {
+		return saveGameFields(updated, revertTo, ['played_hours', 'last_played']);
+	}
+
+	function moveToBacklog(game: Game) {
+		const current = games.find((g) => g.id === game.id) ?? game;
+		return saveGameFields({ ...current, status: 'backlog' }, current, ['status']);
 	}
 
 	async function quickAddHour(game: Game) {
@@ -467,12 +478,16 @@
 			role="status"
 		>
 			{#if quickAddToast.error}
-				<span class="text-red-300">Couldn't save playtime for {quickAddToast.title}: {quickAddToast.error}</span>
+				<span class="text-red-300">Couldn't save changes to {quickAddToast.title}: {quickAddToast.error}</span>
 			{:else}
 				<span>+{quickAddToast.hours}h <span class="font-semibold">{quickAddToast.title}</span></span>
 				<button on:click={undoQuickAdd} class="text-blue-300 hover:text-blue-200 font-medium">Undo</button>
 			{/if}
 		</div>
+	{/if}
+
+	{#if !loading && !isWishlistView}
+		<GoneColdNudge games={libraryGames} onOpenGame={openGameDetail} onMoveToBacklog={moveToBacklog} />
 	{/if}
 
 	{#if !loading && !isWishlistView}

@@ -1,12 +1,14 @@
 <script lang="ts">
 	import type { Game } from '$lib/types';
-	import { getTargetHours } from '$lib/utils';
+	import { getTargetHours, getColdDays } from '$lib/utils';
 	import { PRIORITY_CONFIG } from '$lib/constants';
 	import QuickAddButton from './QuickAddButton.svelte';
 
 	export let game: Game;
 	export let onClick: () => void;
 	export let onQuickAdd: ((game: Game) => void) | null = null;
+
+	$: coldDays = getColdDays(game);
 
 	$: canQuickAdd = onQuickAdd !== null && (game.status === 'playing' || game.status === 'backlog');
 
@@ -30,6 +32,11 @@
 		<span class="absolute top-1.5 right-1.5 z-10 bg-green-600 text-white text-[9px] font-bold uppercase px-1.5 py-0.5 rounded tracking-wide">✓ Finished</span>
 	{:else if game.status === 'abandoned'}
 		<span class="absolute top-1.5 right-1.5 z-10 bg-gray-400 text-white text-[9px] font-bold uppercase px-1.5 py-0.5 rounded tracking-wide">✗ Abandoned</span>
+	{:else if coldDays !== null}
+		<span
+			class="absolute top-1.5 right-1.5 z-10 bg-sky-600/90 text-white text-[10.5px] font-bold px-[7px] py-[2.5px] rounded tracking-wide"
+			title="Not played for {coldDays} days"
+		>❄ {coldDays}d</span>
 	{/if}
 	<!-- Cover Image -->
 	<div class="aspect-[2/3] bg-gray-200 dark:bg-gray-700 flex items-center justify-center relative">
