@@ -36,6 +36,11 @@ CREATE TABLE games (
     guide_url TEXT,
     guide_text TEXT,
 
+    -- Finish celebration
+    rating SMALLINT CHECK (rating BETWEEN 1 AND 10),
+    verdict TEXT,
+    finished_at TIMESTAMPTZ,
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

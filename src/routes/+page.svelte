@@ -9,6 +9,8 @@
 	import NextUpSection from '$lib/components/NextUpSection.svelte';
 	import RealityCheckSection from '$lib/components/RealityCheckSection.svelte';
 	import GoneColdNudge from '$lib/components/GoneColdNudge.svelte';
+	import FinishCelebration from '$lib/components/FinishCelebration.svelte';
+	import HallOfFame from '$lib/components/HallOfFame.svelte';
 	import type { Game } from '$lib/types';
 	import { getTargetHours } from '$lib/utils';
 	import { PRIORITY_ORDER } from '$lib/constants';
@@ -61,6 +63,7 @@
 
 	// Whether the wishlist view is active
 	$: isWishlistView = $activeFilter === 'wishlist';
+	$: isHallOfFameView = $activeFilter === 'hall_of_fame';
 
 	// Library games (exclude wishlist)
 	$: libraryGames = games.filter((g) => g.status !== 'wishlist');
@@ -299,10 +302,20 @@
 
 	// Applies the given fields locally, then saves them (or queues them when offline).
 	// Rolls back to `revertTo` if saving fails.
+	// Supabase errors are plain objects with a `message`, not Error instances
+	function errorMessage(e: unknown, fallback: string): string {
+		if (e && typeof e === 'object' && 'message' in e && typeof e.message === 'string') {
+			return e.message;
+		}
+		return fallback;
+	}
+
+	// `onError` lets a caller show the error itself (e.g. inside a dialog) instead of the toast
 	async function saveGameFields(
 		updated: Game,
 		revertTo: Game,
-		fields: (keyof Game)[]
+		fields: (keyof Game)[],
+		onError?: (message: string) => void
 	): Promise<boolean> {
 		recentLocalWrites.set(updated.id, Date.now());
 		games = games.map((g) => (g.id === updated.id ? updated : g));
@@ -326,13 +339,18 @@
 		} catch (e) {
 			console.error('[QuickSave] Failed to save game:', e);
 			games = games.map((g) => (g.id === revertTo.id ? revertTo : g));
-			showToast({
-				gameId: updated.id,
-				title: updated.title,
-				hours: 0,
-				original: revertTo,
-				error: e instanceof Error ? e.message : 'Failed to save'
-			});
+			const message = errorMessage(e, 'Failed to save');
+			if (onError) {
+				onError(message);
+			} else {
+				showToast({
+					gameId: updated.id,
+					title: updated.title,
+					hours: 0,
+					original: revertTo,
+					error: message
+				});
+			}
 			return false;
 		}
 	}
@@ -344,6 +362,27 @@
 	function moveToBacklog(game: Game) {
 		const current = games.find((g) => g.id === game.id) ?? game;
 		return saveGameFields({ ...current, status: 'backlog' }, current, ['status']);
+	}
+
+	// Finish celebration / rating dialog
+	let ratingGame: Game | null = null;
+	let ratingCelebrate = false;
+
+	function openRating(game: Game, celebrate: boolean) {
+		ratingGame = game;
+		ratingCelebrate = celebrate;
+		if (celebrate) closeGameDetail();
+	}
+
+	// Returns an error message, or null on success
+	async function saveRating(rating: number | null, verdict: string | null): Promise<string | null> {
+		if (!ratingGame) return null;
+		const current = games.find((g) => g.id === ratingGame!.id) ?? ratingGame;
+		const updated = { ...current, rating, verdict };
+		let failure: string | null = null;
+		const ok = await saveGameFields(updated, current, ['rating', 'verdict'], (m) => (failure = m));
+		if (ok && selectedGame?.id === updated.id) selectedGame = updated;
+		return ok ? null : failure;
 	}
 
 	async function quickAddHour(game: Game) {
@@ -486,20 +525,30 @@
 		</div>
 	{/if}
 
-	{#if !loading && !isWishlistView}
+	{#if !loading && !isWishlistView && !isHallOfFameView}
 		<GoneColdNudge games={libraryGames} onOpenGame={openGameDetail} onMoveToBacklog={moveToBacklog} />
 	{/if}
 
-	{#if !loading && !isWishlistView}
+	{#if !loading && !isWishlistView && !isHallOfFameView}
 		<FocusSection {games} onOpenGame={openGameDetail} onQuickAdd={quickAddHour} />
 	{/if}
 
-	{#if !loading && !isWishlistView}
+	{#if !loading && !isWishlistView && !isHallOfFameView}
 		<NextUpSection games={libraryGames} onOpenGame={openGameDetail} />
 		<RealityCheckSection {games} />
 	{/if}
 
-	{#if isWishlistView}
+	{#if isHallOfFameView}
+		{#if loading}
+			<div class="text-center py-20 text-gray-500"><p class="text-lg">Loading…</p></div>
+		{:else}
+			<HallOfFame
+				{games}
+				onOpenGame={openGameDetail}
+				onRateGame={(game) => openRating(game, false)}
+			/>
+		{/if}
+	{:else if isWishlistView}
 		<!-- Wishlist View -->
 		<div class="mb-8 flex flex-wrap gap-4 justify-between items-start">
 			<div>
@@ -627,4 +676,15 @@
 	{availableDevices}
 	{availableSettings}
 	playingGames={libraryGames.filter((g) => g.status === 'playing')}
+	onGameFinished={(game) => openRating(game, true)}
+	onRateGame={(game) => openRating(game, false)}
 />
+
+{#if ratingGame}
+	<FinishCelebration
+		game={ratingGame}
+		celebrate={ratingCelebrate}
+		onSave={saveRating}
+		onClose={() => (ratingGame = null)}
+	/>
+{/if}

@@ -44,6 +44,9 @@ export interface Game {
 	guide_text?: string | null;
 	devices?: string[] | null;
 	setting?: string[] | null;
+	rating?: number | null;
+	verdict?: string | null;
+	finished_at?: string | null;
 }
 
 export interface GameNote {

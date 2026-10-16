@@ -4,6 +4,7 @@
 	import { isOnline } from '$lib/stores/network';
 	import type { Game, GameStatus, GamePriority, GameGenre, GameNote } from '$lib/types';
 	import GameGuide from './GameGuide.svelte';
+	import StarRating from './StarRating.svelte';
 
 	const GENRES: GameGenre[] = [
 		'Action', 'Action RPG', 'Adventure', 'Card Game', 'Fighting', 'First Person Shooter',
@@ -31,6 +32,8 @@
 	export let availableDevices: string[] = [];
 	export let availableSettings: string[] = [];
 	export let playingGames: import('$lib/types').Game[] = [];
+	export let onGameFinished: (game: Game) => void = () => {};
+	export let onRateGame: (game: Game) => void = () => {};
 
 	$: supabase = $page.data.supabase;
 
@@ -132,21 +135,26 @@
 		try {
 			const delta = hoursToAdd + minutesToAdd / 60;
 			const newPlayedHours = Math.max(0, game.played_hours + (subtractMode ? -delta : delta));
+			const justFinished = status === 'finished' && game.status !== 'finished';
+			const changes = {
+				played_hours: newPlayedHours,
+				status,
+				priority,
+				last_played: new Date().toISOString(),
+				...(justFinished ? { finished_at: new Date().toISOString() } : {})
+			};
 
 			const { error: updateError } = await supabase
 				.from('games')
-				.update({
-					played_hours: newPlayedHours,
-					status,
-					priority,
-					last_played: new Date().toISOString()
-				})
+				.update(changes)
 				.eq('id', game.id);
 
 			if (updateError) throw updateError;
 
+			const updatedGame = { ...game, ...changes };
 			onGameUpdated();
 			onClose();
+			if (justFinished) onGameFinished(updatedGame);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to update game';
 		} finally {
@@ -611,6 +619,21 @@
 						<span>•</span>
 						<span>Priority: {PRIORITY_CONFIG[priority].icon} {PRIORITY_CONFIG[priority].label}</span>
 					</div>
+					{#if game.status === 'finished'}
+						<div class="mt-2 flex items-center gap-2 flex-wrap">
+							<StarRating rating={game.rating} />
+							<button
+								type="button"
+								on:click={() => game && onRateGame(game)}
+								class="text-xs text-blue-400 hover:text-blue-300"
+							>
+								{game.rating || game.verdict ? 'Edit rating' : 'Rate this game'}
+							</button>
+						</div>
+						{#if game.verdict}
+							<p class="mt-1 text-sm italic text-gray-300">“{game.verdict}”</p>
+						{/if}
+					{/if}
 					<div class="mt-3">
 						{#if !editingGenres}
 							<div class="flex flex-wrap gap-1.5 items-center">

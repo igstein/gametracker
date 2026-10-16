@@ -3,6 +3,7 @@
 	import { getTargetHours, getColdDays } from '$lib/utils';
 	import { PRIORITY_CONFIG } from '$lib/constants';
 	import QuickAddButton from './QuickAddButton.svelte';
+	import StarRating from './StarRating.svelte';
 
 	export let game: Game;
 	export let onClick: () => void;
@@ -58,6 +59,9 @@
 			<h3 class="font-semibold text-gray-900 dark:text-white text-xs line-clamp-2 flex-1">{game.title}</h3>
 			<span class="text-base {priority.tailwindColor} flex-shrink-0" title={priority.label}>{priority.icon}</span>
 		</div>
+		{#if game.status === 'finished' && game.rating}
+			<div class="-mt-1 mb-1.5"><StarRating rating={game.rating} size="xs" /></div>
+		{/if}
 
 		<!-- Progress Bar -->
 		{#if progress >= 0}
