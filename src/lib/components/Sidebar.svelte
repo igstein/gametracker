@@ -26,7 +26,8 @@
 			label: STATUS_CONFIG[id].label,
 			icon: STATUS_CONFIG[id].icon
 		})),
-		{ id: 'hall_of_fame', label: 'Hall of Fame', icon: '🏆' }
+		{ id: 'hall_of_fame', label: 'Hall of Fame', icon: '🏆' },
+		{ id: 'stats', label: 'Stats', icon: '📊' }
 	];
 
 	const priorityFilters = [

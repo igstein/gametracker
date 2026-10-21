@@ -11,6 +11,7 @@
 	import GoneColdNudge from '$lib/components/GoneColdNudge.svelte';
 	import FinishCelebration from '$lib/components/FinishCelebration.svelte';
 	import HallOfFame from '$lib/components/HallOfFame.svelte';
+	import StatsView from '$lib/components/StatsView.svelte';
 	import type { Game } from '$lib/types';
 	import { getTargetHours } from '$lib/utils';
 	import { PRIORITY_ORDER } from '$lib/constants';
@@ -64,6 +65,7 @@
 	// Whether the wishlist view is active
 	$: isWishlistView = $activeFilter === 'wishlist';
 	$: isHallOfFameView = $activeFilter === 'hall_of_fame';
+	$: isStatsView = $activeFilter === 'stats';
 
 	// Library games (exclude wishlist)
 	$: libraryGames = games.filter((g) => g.status !== 'wishlist');
@@ -525,20 +527,26 @@
 		</div>
 	{/if}
 
-	{#if !loading && !isWishlistView && !isHallOfFameView}
+	{#if !loading && !isWishlistView && !isHallOfFameView && !isStatsView}
 		<GoneColdNudge games={libraryGames} onOpenGame={openGameDetail} onMoveToBacklog={moveToBacklog} />
 	{/if}
 
-	{#if !loading && !isWishlistView && !isHallOfFameView}
+	{#if !loading && !isWishlistView && !isHallOfFameView && !isStatsView}
 		<FocusSection {games} onOpenGame={openGameDetail} onQuickAdd={quickAddHour} />
 	{/if}
 
-	{#if !loading && !isWishlistView && !isHallOfFameView}
+	{#if !loading && !isWishlistView && !isHallOfFameView && !isStatsView}
 		<NextUpSection games={libraryGames} onOpenGame={openGameDetail} />
 		<RealityCheckSection {games} />
 	{/if}
 
-	{#if isHallOfFameView}
+	{#if isStatsView}
+		{#if loading}
+			<div class="text-center py-20 text-gray-500"><p class="text-lg">Loading…</p></div>
+		{:else}
+			<StatsView {games} onOpenGame={openGameDetail} />
+		{/if}
+	{:else if isHallOfFameView}
 		{#if loading}
 			<div class="text-center py-20 text-gray-500"><p class="text-lg">Loading…</p></div>
 		{:else}
