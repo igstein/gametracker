@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import type { Game, GameStatus, GamePriority, HLTBSearchResult } from '$lib/types';
 	import { STATUS_CONFIG } from '$lib/constants';
+	import { searchHLTB } from '$lib/services/hltbClient';
 
 	export let open = false;
 	export let onClose: () => void;
@@ -83,26 +84,7 @@
 		searchError = '';
 
 		try {
-			const {
-				data: { session }
-			} = await $page.data.supabase.auth.getSession();
-
-			const response = await fetch('/api/hltb/search', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${session?.access_token ?? ''}`
-				},
-				body: JSON.stringify({ query: query.trim() })
-			});
-
-			const data = await response.json();
-
-			if (!response.ok) {
-				throw new Error(data.error || 'Search failed');
-			}
-
-			searchResults = data.results || [];
+			searchResults = await searchHLTB($page.data.supabase, query);
 
 			if (searchResults.length === 0) {
 				searchError = 'No games found. Try a different search or add manually.';

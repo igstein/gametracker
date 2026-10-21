@@ -3,7 +3,7 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import GameCard from '$lib/components/GameCard.svelte';
-	import WishlistCard from '$lib/components/WishlistCard.svelte';
+	import WishlistList from '$lib/components/WishlistList.svelte';
 	import GameDetailModal from '$lib/components/GameDetailModal.svelte';
 	import FocusSection from '$lib/components/FocusSection.svelte';
 	import NextUpSection from '$lib/components/NextUpSection.svelte';
@@ -158,10 +158,10 @@
 				sorted.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
 				break;
 			case 'main_story_asc':
-				sorted.sort((a, b) => (a.main_story_hours ?? 999) - (b.main_story_hours ?? 999));
+				sorted.sort((a, b) => (getTargetHours(a) || Infinity) - (getTargetHours(b) || Infinity));
 				break;
 			case 'main_story_desc':
-				sorted.sort((a, b) => (b.main_story_hours ?? 0) - (a.main_story_hours ?? 0));
+				sorted.sort((a, b) => getTargetHours(b) - getTargetHours(a));
 				break;
 			case 'created_at_desc':
 			default:
@@ -171,8 +171,8 @@
 		return sorted;
 	})();
 
-	// Unique platforms across library games (for quick-select in detail modal and sidebar filter)
-	$: availablePlatforms = [...new Set(libraryGames.flatMap((g) => g.platform ?? []))].sort();
+	// Unique platforms across all games incl. wishlist (for quick-select in detail modal and sidebar filter)
+	$: availablePlatforms = [...new Set(games.flatMap((g) => g.platform ?? []))].sort();
 
 	// Unique devices across all games (for quick-select in detail modal)
 	$: availableDevices = [...new Set(games.flatMap((g) => g.devices ?? []))].sort();
@@ -561,7 +561,7 @@
 		<div class="mb-8 flex flex-wrap gap-4 justify-between items-start">
 			<div>
 				<h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">💫 Wishlist</h2>
-				<p class="text-gray-600 dark:text-gray-400">Games you want to play in the future</p>
+				<p class="text-gray-600 dark:text-gray-400">{wishlistGames.length} game{wishlistGames.length === 1 ? '' : 's'} you want to play in the future</p>
 			</div>
 			<div class="flex items-center gap-2">
 				<label for="sort-select" class="text-gray-600 dark:text-gray-400 text-sm">Sort by:</label>
@@ -574,8 +574,8 @@
 					<option value="name_asc">Name (A-Z)</option>
 					<option value="name_desc">Name (Z-A)</option>
 					<option value="priority">Priority</option>
-					<option value="main_story_asc">Length (Short to Long)</option>
-					<option value="main_story_desc">Length (Long to Short)</option>
+					<option value="main_story_asc">Target (Short to Long)</option>
+					<option value="main_story_desc">Target (Long to Short)</option>
 				</select>
 			</div>
 		</div>
@@ -598,11 +598,7 @@
 				<p class="text-lg">Loading wishlist...</p>
 			</div>
 		{:else if filteredAndSortedWishlist.length > 0}
-			<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-[1800px]">
-				{#each filteredAndSortedWishlist as game (game.id)}
-					<WishlistCard {game} onClick={() => openGameDetail(game)} />
-				{/each}
-			</div>
+			<WishlistList games={filteredAndSortedWishlist} onOpenGame={openGameDetail} />
 		{:else if wishlistGames.length > 0}
 			<div class="text-center py-20 text-gray-500 dark:text-gray-500">
 				<p class="text-lg">No wishlist games match the current filter.</p>

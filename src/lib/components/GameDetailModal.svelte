@@ -2,7 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { isOnline } from '$lib/stores/network';
-	import type { Game, GameStatus, GamePriority, GameGenre, GameNote } from '$lib/types';
+	import type { Game, GameStatus, GamePriority, GameGenre, GameNote, HLTBSearchResult } from '$lib/types';
 	import GameGuide from './GameGuide.svelte';
 	import StarRating from './StarRating.svelte';
 
@@ -13,6 +13,7 @@
 		'Tactical RPG', 'Visual Novel'
 	];
 	import { getTargetHours } from '$lib/utils';
+	import { searchHLTB } from '$lib/services/hltbClient';
 	import { PRIORITY_CONFIG } from '$lib/constants';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
@@ -56,6 +57,14 @@
 	let addingDevice = false;
 	let newDeviceInput = '';
 
+	// Edit version state (wishlist): re-pick the game from HLTB
+	let editingVersion = false;
+	let versionQuery = '';
+	let versionResults: HLTBSearchResult[] = [];
+	let versionSearching = false;
+	let versionError = '';
+	let versionDebounce: ReturnType<typeof setTimeout> | null = null;
+
 	// Setting state
 	let addingSetting = false;
 	let newSettingInput = '';
@@ -96,6 +105,7 @@
 		newDeviceInput = '';
 		addingSetting = false;
 		newSettingInput = '';
+		closeVersionEditor();
 		loadNotes();
 		setupNotesRealtimeSubscription();
 	}
@@ -197,6 +207,73 @@
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to delete game';
 			confirmingDelete = false;
+		} finally {
+			saving = false;
+		}
+	}
+
+	function openVersionEditor() {
+		if (!game) return;
+		editingVersion = true;
+		versionQuery = game.title;
+		runVersionSearch();
+	}
+
+	function closeVersionEditor() {
+		if (versionDebounce) clearTimeout(versionDebounce);
+		editingVersion = false;
+		versionQuery = '';
+		versionResults = [];
+		versionError = '';
+	}
+
+	function handleVersionInput() {
+		if (versionDebounce) clearTimeout(versionDebounce);
+		versionDebounce = setTimeout(runVersionSearch, 500);
+	}
+
+	async function runVersionSearch() {
+		const query = versionQuery.trim();
+		if (query.length < 2) {
+			versionResults = [];
+			return;
+		}
+		versionSearching = true;
+		versionError = '';
+		try {
+			versionResults = await searchHLTB(supabase, query);
+			if (versionResults.length === 0) versionError = 'No games found. Try a different search.';
+		} catch (e) {
+			versionError = e instanceof Error ? e.message : 'Search failed';
+			versionResults = [];
+		} finally {
+			versionSearching = false;
+		}
+	}
+
+	// Replaces the game's HLTB identity (title, cover, times); priority and platforms stay.
+	// A custom target belonged to the old version, so it is cleared.
+	async function applyVersion(result: HLTBSearchResult) {
+		if (!game) return;
+		saving = true;
+		error = '';
+		try {
+			const changes = {
+				title: result.title,
+				hltb_id: result.id,
+				cover_image_url: result.imageUrl,
+				main_story_hours: result.mainStoryHours || null,
+				main_plus_extras_hours: result.mainPlusExtrasHours || null,
+				completionist_hours: result.completionistHours || null,
+				custom_target_hours: null
+			};
+			const { error: updateError } = await supabase.from('games').update(changes).eq('id', game.id);
+			if (updateError) throw updateError;
+			game = { ...game, ...changes } as Game;
+			closeVersionEditor();
+			onGameUpdated();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to change version';
 		} finally {
 			saving = false;
 		}
@@ -833,11 +910,81 @@
 			{#if game.status === 'wishlist'}
 			<div class="bg-gray-700 rounded-lg p-4 mb-6">
 				<div class="flex justify-between items-center mb-3">
-					<h4 class="text-sm font-medium text-gray-300">HowLongToBeat</h4>
+					<div class="flex items-center gap-3">
+						<h4 class="text-sm font-medium text-gray-300">HowLongToBeat</h4>
+						{#if !editingVersion}
+							<button
+								type="button"
+								on:click={openVersionEditor}
+								class="text-xs text-blue-400 hover:text-blue-300"
+								title="Pick a different version of this game from HLTB"
+							>
+								✎ Edit version
+							</button>
+						{/if}
+					</div>
 					{#if targetHours > 0}
 						<span class="text-white font-semibold text-sm">Target: {Math.round(targetHours)}h</span>
 					{/if}
 				</div>
+				{#if editingVersion}
+					<div class="mb-4 space-y-2">
+						<div class="flex gap-2">
+							<input
+								type="text"
+								bind:value={versionQuery}
+								on:input={handleVersionInput}
+								placeholder="Search HLTB for the version you want"
+								class="flex-1 min-w-0 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+							/>
+							<button
+								type="button"
+								on:click={closeVersionEditor}
+								class="px-3 py-1.5 text-sm text-gray-300 hover:text-white"
+							>
+								Cancel
+							</button>
+						</div>
+						<p class="text-xs text-gray-400">Title, cover and times are replaced. Priority and platforms stay.</p>
+						{#if versionSearching}
+							<p class="text-xs text-gray-400">Searching…</p>
+						{:else if versionError}
+							<p class="text-xs text-amber-400">{versionError}</p>
+						{/if}
+						{#if versionResults.length > 0}
+							<ul class="max-h-64 overflow-y-auto divide-y divide-gray-600 bg-gray-800 rounded-lg">
+								{#each versionResults as result (result.id)}
+									<li class="flex items-center gap-3 p-2">
+										{#if result.imageUrl}
+											<img src={result.imageUrl} alt="" class="w-8 h-11 object-cover rounded flex-shrink-0" />
+										{:else}
+											<div class="w-8 h-11 bg-gray-700 rounded flex-shrink-0"></div>
+										{/if}
+										<div class="flex-1 min-w-0">
+											<p class="text-sm text-white truncate">{result.title}</p>
+											<p class="text-xs text-gray-400">
+												Main {result.mainStoryHours ? Math.round(result.mainStoryHours) + 'h' : '—'}
+												· M+E {result.mainPlusExtrasHours ? Math.round(result.mainPlusExtrasHours) + 'h' : '—'}
+											</p>
+										</div>
+										{#if result.id === game.hltb_id}
+											<span class="text-xs text-gray-400 flex-shrink-0">Current</span>
+										{:else}
+											<button
+												type="button"
+												on:click={() => applyVersion(result)}
+												disabled={saving}
+												class="px-2.5 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0 disabled:opacity-50"
+											>
+												Use this
+											</button>
+										{/if}
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</div>
+				{/if}
 				<div class="grid grid-cols-3 gap-3 text-center">
 					<div>
 						<p class="text-xs text-gray-400">Main Story</p>
