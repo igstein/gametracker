@@ -598,7 +598,7 @@
 				<p class="text-lg">Loading wishlist...</p>
 			</div>
 		{:else if filteredAndSortedWishlist.length > 0}
-			<WishlistList games={filteredAndSortedWishlist} onOpenGame={openGameDetail} />
+			<WishlistList games={filteredAndSortedWishlist} onOpenGame={openGameDetail} platformFilter={$activePlatformFilter} />
 		{:else if wishlistGames.length > 0}
 			<div class="text-center py-20 text-gray-500 dark:text-gray-500">
 				<p class="text-lg">No wishlist games match the current filter.</p>
