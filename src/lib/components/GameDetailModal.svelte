@@ -37,9 +37,8 @@
 
 	$: supabase = $page.data.supabase;
 
-	let hoursToAdd = 0;
-	let minutesToAdd = 0;
-	let subtractMode = false;
+	// Pending whole-hour change, applied on Update
+	let playtimeDelta = 0;
 	let status: GameStatus = 'backlog';
 	let priority: GamePriority = 'medium';
 	let saving = false;
@@ -70,13 +69,16 @@
 	let editingNoteId: string | null = null;
 	let notesRealtimeChannel: RealtimeChannel | null = null;
 
-	// Update local values when game changes
-	$: if (game) {
+	// Reset local values only when a different game is opened. In-modal edits
+	// (target, genres, platforms...) and realtime syncs replace the `game` object
+	// too, and must not wipe pending playtime/status changes.
+	let loadedGameId: string | null = null;
+	$: if (!game) loadedGameId = null;
+	$: if (game && game.id !== loadedGameId) {
+		loadedGameId = game.id;
 		status = game.status;
 		priority = game.priority;
-		hoursToAdd = 0;
-		minutesToAdd = 0;
-		subtractMode = false;
+		playtimeDelta = 0;
 		// Reset note form state
 		showAddNote = false;
 		noteTitle = '';
@@ -133,8 +135,7 @@
 		error = '';
 
 		try {
-			const delta = hoursToAdd + minutesToAdd / 60;
-			const newPlayedHours = Math.max(0, game.played_hours + (subtractMode ? -delta : delta));
+			const newPlayedHours = Math.max(0, game.played_hours + playtimeDelta);
 			const justFinished = status === 'finished' && game.status !== 'finished';
 			const changes = {
 				played_hours: newPlayedHours,
@@ -860,52 +861,30 @@
 				{#if status !== 'wishlist'}
 				<div>
 					<label class="block text-sm font-medium text-gray-300 mb-2">Adjust Playtime</label>
-					<div class="flex gap-2 mb-2">
+					<div class="flex items-center gap-3">
 						<button
 							type="button"
-							on:click={() => { subtractMode = false; }}
-							class="px-3 py-1 text-sm rounded-lg transition-colors {!subtractMode ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+							on:click={() => (playtimeDelta -= 1)}
+							disabled={game.played_hours + playtimeDelta <= 0}
+							class="px-4 py-2 text-sm font-semibold rounded-lg bg-gray-700 text-gray-200 hover:bg-red-600 hover:text-white active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none"
 						>
-							+ Add
+							−1h
 						</button>
 						<button
 							type="button"
-							on:click={() => { subtractMode = true; }}
-							class="px-3 py-1 text-sm rounded-lg transition-colors {subtractMode ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}"
+							on:click={() => (playtimeDelta += 1)}
+							class="px-4 py-2 text-sm font-semibold rounded-lg bg-gray-700 text-gray-200 hover:bg-green-600 hover:text-white active:scale-95 transition"
 						>
-							− Remove
+							+1h
 						</button>
+						<p class="text-xs text-gray-500">
+							{#if playtimeDelta !== 0}
+								New total: {Math.max(0, game.played_hours + playtimeDelta).toFixed(1)} hours ({playtimeDelta > 0 ? '+' : '−'}{Math.abs(playtimeDelta)}h)
+							{:else}
+								Tap to add or remove an hour
+							{/if}
+						</p>
 					</div>
-					<div class="flex gap-3">
-						<div class="flex-1">
-							<input
-								type="number"
-								bind:value={hoursToAdd}
-								min="0"
-								placeholder="Hours"
-								class="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-							/>
-						</div>
-						<div class="flex-1">
-							<input
-								type="number"
-								bind:value={minutesToAdd}
-								min="0"
-								max="59"
-								placeholder="Minutes"
-								class="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-							/>
-						</div>
-					</div>
-					<p class="text-xs text-gray-500 mt-1">
-						{#if hoursToAdd > 0 || minutesToAdd > 0}
-							{@const delta = hoursToAdd + minutesToAdd / 60}
-							{@const newTotal = Math.max(0, game.played_hours + (subtractMode ? -delta : delta))}
-							New total: {newTotal.toFixed(1)} hours ({subtractMode ? '−' : '+'}{delta.toFixed(1)}h)
-						{:else}
-							Enter hours and/or minutes to {subtractMode ? 'remove' : 'add'}
-						{/if}
-					</p>
 				</div>
 				{/if}
 
