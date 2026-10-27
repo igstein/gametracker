@@ -1,10 +1,39 @@
 <script lang="ts">
-	import type { Game } from '$lib/types';
+	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { isOnline } from '$lib/stores/network';
+	import type { Game, PlaySession } from '$lib/types';
 
 	export let games: Game[] = [];
 	export let onOpenGame: (game: Game) => void;
 
 	const MONTHS_SHOWN = 12;
+
+	// Play sessions in the shown months (the log started in Oct 2026, so older months stay empty)
+	type SessionRow = Pick<PlaySession, 'game_id' | 'hours' | 'played_at'>;
+	let sessions: SessionRow[] = [];
+	let sessionsState: 'loading' | 'ready' | 'offline' | 'error' = 'loading';
+
+	onMount(async () => {
+		if (!$isOnline) {
+			sessionsState = 'offline';
+			return;
+		}
+		const now = new Date();
+		const since = new Date(now.getFullYear(), now.getMonth() - (MONTHS_SHOWN - 1), 1);
+		const { data, error } = await $page.data.supabase
+			.from('play_sessions')
+			.select('game_id, hours, played_at')
+			.gte('played_at', since.toISOString())
+			.order('played_at', { ascending: true });
+		if (error) {
+			console.error('Error loading play sessions:', error);
+			sessionsState = 'error';
+			return;
+		}
+		sessions = data ?? [];
+		sessionsState = 'ready';
+	});
 
 	$: library = games.filter((g) => g.status !== 'wishlist');
 	$: finished = games.filter((g) => g.status === 'finished');
@@ -39,6 +68,40 @@
 		return buckets;
 	})();
 	$: maxPerMonth = Math.max(1, ...months.map((m) => m.games.length));
+
+	// Net hours per month (−1h corrections subtract), with a per-game breakdown for the tooltip
+	$: titleById = new Map(games.map((g) => [g.id, g.title]));
+	$: hourMonths = (() => {
+		const now = new Date();
+		const buckets = Array.from({ length: MONTHS_SHOWN }, (_, i) => {
+			const date = new Date(now.getFullYear(), now.getMonth() - (MONTHS_SHOWN - 1 - i), 1);
+			return { key: monthKey(date), date, hours: 0, perGame: new Map<string, number>() };
+		});
+		const byKey = new Map(buckets.map((b) => [b.key, b]));
+		for (const session of sessions) {
+			const bucket = byKey.get(monthKey(new Date(session.played_at)));
+			if (!bucket) continue;
+			bucket.hours += Number(session.hours);
+			bucket.perGame.set(session.game_id, (bucket.perGame.get(session.game_id) ?? 0) + Number(session.hours));
+		}
+		return buckets.map((b) => ({
+			...b,
+			hours: Math.max(0, b.hours),
+			games: [...b.perGame.entries()]
+				.filter(([, hours]) => hours > 0)
+				.sort((a, b) => b[1] - a[1])
+				.map(([id, hours]) => ({ id, title: titleById.get(id) ?? 'Deleted game', hours }))
+		}));
+	})();
+	$: gameById = new Map(games.map((g) => [g.id, g]));
+
+	// Month whose games are listed below the chart; starts on the current month
+	let selectedMonthKey = monthKey(new Date());
+	$: selectedMonth = hourMonths.find((m) => m.key === selectedMonthKey) ?? hourMonths[hourMonths.length - 1];
+	$: maxGameHours = Math.max(1, ...selectedMonth.games.map((g) => g.hours));
+	$: maxHoursPerMonth = Math.max(1, ...hourMonths.map((m) => m.hours));
+	$: loggedHours = hourMonths.reduce((sum, m) => sum + m.hours, 0);
+	$: firstSession = sessions.length ? new Date(sessions[0].played_at) : null;
 
 	$: finishedPerYear = (() => {
 		const counts = new Map<number, number>();
@@ -136,6 +199,91 @@
 					{/each}
 				</div>
 			</div>
+		</section>
+
+		<!-- Hours played per month -->
+		<section>
+			<h3 class="text-lg font-bold text-gray-900 dark:text-white mb-1">Hours played per month</h3>
+			{#if sessionsState === 'loading'}
+				<p class="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+			{:else if sessionsState === 'offline'}
+				<p class="text-sm text-gray-500 dark:text-gray-400">Needs a connection to load your play sessions.</p>
+			{:else if sessionsState === 'error'}
+				<p class="text-sm text-gray-500 dark:text-gray-400">Couldn't load your play sessions.</p>
+			{:else if sessions.length === 0}
+				<p class="text-sm text-gray-500 dark:text-gray-400">No play sessions logged yet. Hours you add with +1h or in a game's details show up here.</p>
+			{:else}
+				<p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+					Last {MONTHS_SHOWN} months · {formatHours(loggedHours)} logged{#if firstSession}{' · '}tracked since {firstSession.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}{/if}
+				</p>
+				<div class="overflow-x-auto">
+					<div class="flex items-end gap-0.5 h-40 min-w-[320px] border-b border-gray-200 dark:border-gray-700">
+						{#each hourMonths as month (month.key)}
+							{@const selected = month.key === selectedMonth.key}
+							<button
+								type="button"
+								on:click={() => (selectedMonthKey = month.key)}
+								aria-pressed={selected}
+								class="group relative flex-1 h-full flex flex-col justify-end items-center rounded-t {selected ? 'bg-gray-100 dark:bg-gray-800' : ''}"
+								title="{month.date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}: {formatHours(month.hours)}"
+							>
+								{#if month.hours > 0}
+									<span class="text-xs tabular-nums mb-1 {selected ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-300'}">{Math.round(month.hours)}</span>
+									<div
+										class="w-3/5 max-w-8 rounded-t transition-colors {selected ? 'bg-blue-600 dark:bg-blue-300' : 'bg-blue-500 dark:bg-blue-400 group-hover:bg-blue-600 dark:group-hover:bg-blue-300'}"
+										style="height: {(month.hours / maxHoursPerMonth) * 80}%"
+									></div>
+								{/if}
+							</button>
+						{/each}
+					</div>
+					<div class="flex gap-0.5 min-w-[320px] mt-1">
+						{#each hourMonths as month (month.key)}
+							<span class="flex-1 text-center text-[10px] {month.key === selectedMonth.key ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}">{formatMonth(month.date)}</span>
+						{/each}
+					</div>
+				</div>
+
+				<!-- Games played in the selected month -->
+				<div class="mt-5 max-w-xl">
+					<p class="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+						{selectedMonth.date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+						<span class="font-normal text-gray-500 dark:text-gray-400">
+							· {formatHours(selectedMonth.hours)}{#if selectedMonth.games.length > 0}{' · '}{selectedMonth.games.length} game{selectedMonth.games.length === 1 ? '' : 's'}{/if}
+						</span>
+					</p>
+					{#if selectedMonth.games.length === 0}
+						<p class="text-sm text-gray-500 dark:text-gray-400">No hours logged this month. Pick another month in the chart.</p>
+					{:else}
+						<ul class="space-y-1.5">
+							{#each selectedMonth.games as row (row.id)}
+								{@const game = gameById.get(row.id)}
+								<li class="flex items-center gap-3 text-sm">
+									{#if game}
+										<button
+											type="button"
+											on:click={() => onOpenGame(game)}
+											class="w-40 sm:w-56 truncate text-left text-gray-900 dark:text-white hover:underline flex-shrink-0"
+											title={row.title}
+										>
+											{row.title}
+										</button>
+									{:else}
+										<span class="w-40 sm:w-56 truncate text-gray-500 dark:text-gray-400 flex-shrink-0">{row.title}</span>
+									{/if}
+									<div class="flex-1 h-3">
+										<div
+											class="h-full bg-blue-500 dark:bg-blue-400 rounded-r"
+											style="width: {(row.hours / maxGameHours) * 100}%"
+										></div>
+									</div>
+									<span class="w-12 text-right tabular-nums text-gray-600 dark:text-gray-300 flex-shrink-0">{formatHours(row.hours)}</span>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+			{/if}
 		</section>
 
 		<!-- Ratings -->
