@@ -64,19 +64,22 @@
 		if (!$page.data.user) return;
 		exporting = true;
 		try {
-			const [gamesRes, notesRes] = await Promise.all([
+			const [gamesRes, notesRes, sessionsRes] = await Promise.all([
 				$page.data.supabase.from('games').select('*').eq('user_id', $page.data.user.id),
-				$page.data.supabase.from('game_notes').select('*').eq('user_id', $page.data.user.id)
+				$page.data.supabase.from('game_notes').select('*').eq('user_id', $page.data.user.id),
+				$page.data.supabase.from('play_sessions').select('*').eq('user_id', $page.data.user.id)
 			]);
 
 			if (gamesRes.error) throw gamesRes.error;
 			if (notesRes.error) throw notesRes.error;
+			if (sessionsRes.error) throw sessionsRes.error;
 
 			const payload = {
 				version: 1,
 				exportedAt: new Date().toISOString(),
 				games: gamesRes.data ?? [],
-				notes: notesRes.data ?? []
+				notes: notesRes.data ?? [],
+				sessions: sessionsRes.data ?? []
 			};
 
 			const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -128,6 +131,13 @@
 			if (data.notes?.length > 0) {
 				const notes = data.notes.map((n: Record<string, unknown>) => ({ ...n, user_id: userId }));
 				const { error } = await $page.data.supabase.from('game_notes').upsert(notes, { onConflict: 'id' });
+				if (error) throw error;
+			}
+
+			// Upsert play sessions with current user_id (missing in backups made before the session log)
+			if (data.sessions?.length > 0) {
+				const sessions = data.sessions.map((s: Record<string, unknown>) => ({ ...s, user_id: userId }));
+				const { error } = await $page.data.supabase.from('play_sessions').upsert(sessions, { onConflict: 'id' });
 				if (error) throw error;
 			}
 

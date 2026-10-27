@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
-	import type { Game } from '$lib/types';
-	import { getTargetHours, scoreGame, getMostRecentGenres } from '$lib/utils';
+	import type { Game, LatestNote } from '$lib/types';
+	import { getTargetHours, scoreGame, getMostRecentGenres, formatDaysAgo } from '$lib/utils';
 	import { PRIORITY_CONFIG } from '$lib/constants';
 
 	export let games: Game[] = [];
 	export let onOpenGame: (game: Game) => void;
+	export let latestNotes: Record<string, LatestNote> = {};
 
 	const STORAGE_KEY_OPEN = 'gametracker_nextup_open';
 	const STORAGE_KEY_MOOD = 'gametracker_mood';
@@ -184,6 +185,7 @@
 					{@const prog = Math.min(100, t > 0 ? (game.played_hours / t) * 100 : 0)}
 					{@const progColor = prog < 30 ? 'bg-red-500' : prog < 70 ? 'bg-yellow-500' : 'bg-green-500'}
 					{@const prio = PRIORITY_CONFIG[game.priority]}
+					{@const lastNote = game.status === 'playing' ? latestNotes[game.id] : undefined}
 					<div
 						on:click={() => onOpenGame(game)}
 						on:keydown={(e) => e.key === 'Enter' && onOpenGame(game)}
@@ -225,6 +227,11 @@
 								</div>
 							{:else}
 								<p class="text-[9px] text-amber-500 dark:text-amber-400">Set target time</p>
+							{/if}
+							{#if lastNote}
+								<p class="mt-1.5 text-[9px] leading-snug text-gray-500 dark:text-gray-400 line-clamp-2" title={lastNote.text}>
+									📝 <span class="text-gray-400 dark:text-gray-500">{formatDaysAgo(lastNote.at)} ·</span> {lastNote.text}
+								</p>
 							{/if}
 							{#if showDebug}
 								<div class="mt-1.5 border-t border-yellow-400/30 pt-1 space-y-0.5 font-mono text-[8px] text-yellow-400">

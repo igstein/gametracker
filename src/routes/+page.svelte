@@ -12,7 +12,7 @@
 	import FinishCelebration from '$lib/components/FinishCelebration.svelte';
 	import HallOfFame from '$lib/components/HallOfFame.svelte';
 	import StatsView from '$lib/components/StatsView.svelte';
-	import type { Game } from '$lib/types';
+	import type { Game, LatestNote } from '$lib/types';
 	import { getTargetHours } from '$lib/utils';
 	import { PRIORITY_ORDER } from '$lib/constants';
 	import type { Writable } from 'svelte/store';
@@ -29,6 +29,7 @@
 		removeFromSyncQueue,
 		addToSyncQueue
 	} from '$lib/services/offline';
+	import { insertSession, updateSession, deleteSession, loadLatestNotes } from '$lib/services/sessions';
 
 	let games: Game[] = [];
 	let loading = true;
@@ -38,6 +39,10 @@
 	let showDetailModal = false;
 	let realtimeChannel: RealtimeChannel | null = null;
 	let realtimeConnected = false;
+
+	// "Where was I?": newest journal text per Playing game, shown on cards
+	let latestNotes: Record<string, LatestNote> = {};
+	let latestNotesTimer: ReturnType<typeof setTimeout> | null = null;
 
 	$: supabase = $page.data.supabase;
 
@@ -217,6 +222,23 @@
 		} finally {
 			loading = false;
 		}
+		refreshLatestNotes();
+	}
+
+	async function refreshLatestNotes() {
+		if (!$isOnline) return;
+		const playingIds = games.filter((g) => g.status === 'playing').map((g) => g.id);
+		try {
+			latestNotes = await loadLatestNotes(supabase, playingIds);
+		} catch (e) {
+			console.error('Error loading latest notes:', e);
+		}
+	}
+
+	// Realtime note/session changes can come in bursts (e.g. repeated +1h taps)
+	function scheduleLatestNotesRefresh() {
+		if (latestNotesTimer) clearTimeout(latestNotesTimer);
+		latestNotesTimer = setTimeout(refreshLatestNotes, 500);
 	}
 
 	let syncing = false;
@@ -275,6 +297,7 @@
 	function closeGameDetail() {
 		showDetailModal = false;
 		selectedGame = null;
+		refreshLatestNotes();
 	}
 
 	function handleGameUpdated() {
@@ -287,15 +310,22 @@
 		title: string;
 		hours: number;
 		original: Game; // state before the first tap, restored on undo
+		sessionId?: string; // play session logged for these taps
+		noting?: boolean; // note input is open; the toast stays until saved or dismissed
 		error?: string;
 	}
 	let quickAddToast: QuickAddToast | null = null;
 	let toastTimer: ReturnType<typeof setTimeout> | null = null;
+	let toastNote = '';
 
 	function showToast(toast: QuickAddToast) {
 		quickAddToast = toast;
 		if (toastTimer) clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => (quickAddToast = null), 5000);
+		if (!toast.noting) toastTimer = setTimeout(() => (quickAddToast = null), 5000);
+	}
+
+	function focusOnMount(node: HTMLInputElement) {
+		node.focus();
 	}
 
 	// Realtime echoes of our own quick saves can arrive out of order; ignore them briefly
@@ -400,16 +430,66 @@
 		const hours = sameGame ? quickAddToast!.hours + 1 : 1;
 
 		if (await savePlaytime(updated, current)) {
-			showToast({ gameId: game.id, title: game.title, hours, original });
+			const sessionId = await logQuickSession(game.id, sameGame ? quickAddToast!.sessionId : undefined, hours);
+			const noting = sameGame ? quickAddToast!.noting : false;
+			showToast({ gameId: game.id, title: game.title, hours, original, sessionId, noting });
+		}
+	}
+
+	// Repeated taps grow one session row instead of adding a row per tap.
+	// A failed session write doesn't undo the playtime, it's only logged.
+	async function logQuickSession(gameId: string, sessionId: string | undefined, hours: number) {
+		try {
+			if (sessionId) {
+				await updateSession(supabase, sessionId, { hours });
+				return sessionId;
+			}
+			const id = crypto.randomUUID();
+			await insertSession(supabase, {
+				id,
+				game_id: gameId,
+				user_id: $page.data.user!.id,
+				hours: 1,
+				note: null,
+				played_at: new Date().toISOString()
+			});
+			return id;
+		} catch (e) {
+			console.error('[QuickSave] Failed to log play session:', e);
+			return sessionId;
 		}
 	}
 
 	async function undoQuickAdd() {
 		if (!quickAddToast || quickAddToast.error) return;
-		const { gameId, original } = quickAddToast;
+		const { gameId, original, sessionId } = quickAddToast;
 		quickAddToast = null;
 		const current = games.find((g) => g.id === gameId);
 		if (current) await savePlaytime(original, current);
+		if (sessionId) {
+			deleteSession(supabase, sessionId).catch((e) =>
+				console.error('[QuickSave] Failed to delete play session:', e)
+			);
+		}
+	}
+
+	function startToastNote() {
+		if (!quickAddToast) return;
+		toastNote = '';
+		showToast({ ...quickAddToast, noting: true });
+	}
+
+	async function saveToastNote() {
+		const toast = quickAddToast;
+		const text = toastNote.trim();
+		quickAddToast = null;
+		if (!toast?.sessionId || !text) return;
+		try {
+			await updateSession(supabase, toast.sessionId, { note: text });
+			latestNotes = { ...latestNotes, [toast.gameId]: { text, at: new Date().toISOString() } };
+		} catch (e) {
+			showToast({ ...toast, noting: false, error: errorMessage(e, 'Failed to save note') });
+		}
 	}
 
 	function setupRealtimeSubscription() {
@@ -454,6 +534,8 @@
 					}
 				}
 			)
+			.on('postgres_changes', { event: '*', schema: 'public', table: 'game_notes' }, scheduleLatestNotesRefresh)
+			.on('postgres_changes', { event: '*', schema: 'public', table: 'play_sessions' }, scheduleLatestNotesRefresh)
 			.subscribe((status) => {
 				if (status === 'SUBSCRIBED') {
 					console.log('Realtime connected');
@@ -480,6 +562,7 @@
 
 	onDestroy(() => {
 		if (toastTimer) clearTimeout(toastTimer);
+		if (latestNotesTimer) clearTimeout(latestNotesTimer);
 		// Clean up Realtime subscription
 		if (realtimeChannel) {
 			supabase.removeChannel(realtimeChannel);
@@ -520,9 +603,26 @@
 		>
 			{#if quickAddToast.error}
 				<span class="text-red-300">Couldn't save changes to {quickAddToast.title}: {quickAddToast.error}</span>
+			{:else if quickAddToast.noting}
+				<form on:submit|preventDefault={saveToastNote} class="flex items-center gap-2">
+					<span class="whitespace-nowrap">+{quickAddToast.hours}h</span>
+					<input
+						use:focusOnMount
+						bind:value={toastNote}
+						on:keydown={(e) => e.key === 'Escape' && (quickAddToast = null)}
+						placeholder="Anything to remember?"
+						maxlength="500"
+						class="w-52 sm:w-72 px-2 py-1 rounded bg-gray-800 dark:bg-gray-600 text-white placeholder-gray-400 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+					/>
+					<button type="submit" disabled={!toastNote.trim()} class="text-blue-300 hover:text-blue-200 font-medium disabled:opacity-40">Save</button>
+					<button type="button" on:click={() => (quickAddToast = null)} class="text-gray-400 hover:text-gray-200" aria-label="Dismiss">✕</button>
+				</form>
 			{:else}
 				<span>+{quickAddToast.hours}h <span class="font-semibold">{quickAddToast.title}</span></span>
 				<button on:click={undoQuickAdd} class="text-blue-300 hover:text-blue-200 font-medium">Undo</button>
+				{#if quickAddToast.sessionId}
+					<button on:click={startToastNote} class="text-blue-300 hover:text-blue-200 font-medium">✎ Note</button>
+				{/if}
 			{/if}
 		</div>
 	{/if}
@@ -536,7 +636,7 @@
 	{/if}
 
 	{#if !loading && !isWishlistView && !isHallOfFameView && !isStatsView}
-		<NextUpSection games={libraryGames} onOpenGame={openGameDetail} />
+		<NextUpSection games={libraryGames} onOpenGame={openGameDetail} {latestNotes} />
 		<RealityCheckSection {games} />
 	{/if}
 
@@ -655,7 +755,12 @@
 		{:else if filteredAndSortedGames.length > 0}
 			<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 max-w-[1800px]">
 				{#each filteredAndSortedGames as game (game.id)}
-					<GameCard {game} onClick={() => openGameDetail(game)} onQuickAdd={quickAddHour} />
+					<GameCard
+						{game}
+						onClick={() => openGameDetail(game)}
+						onQuickAdd={quickAddHour}
+						lastNote={game.status === 'playing' ? latestNotes[game.id] : undefined}
+					/>
 				{/each}
 			</div>
 		{:else if libraryGames.length > 0}

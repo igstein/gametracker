@@ -14,7 +14,7 @@ const SYNC_QUEUE_STORE = 'sync_queue';
 export interface SyncQueueItem {
 	id: string;
 	operation: 'insert' | 'update' | 'delete';
-	table: 'games' | 'game_notes';
+	table: 'games' | 'game_notes' | 'play_sessions';
 	data: any;
 	timestamp: number;
 }

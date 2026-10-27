@@ -67,6 +67,19 @@ CREATE TABLE focus_weeks (
 
 CREATE INDEX focus_weeks_user_set_at_idx ON focus_weeks (user_id, set_at DESC);
 
+-- Play sessions: one row per playtime change (negative hours = correction), with an optional note
+CREATE TABLE play_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    game_id UUID REFERENCES games(id) ON DELETE CASCADE NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL DEFAULT auth.uid(),
+    hours DECIMAL NOT NULL,
+    note TEXT,
+    played_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX play_sessions_user_played_at_idx ON play_sessions (user_id, played_at DESC);
+CREATE INDEX play_sessions_game_id_idx ON play_sessions (game_id);
+
 -- Row Level Security: users can only access their own data
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own games" ON games
@@ -78,6 +91,10 @@ CREATE POLICY "Users manage own notes" ON game_notes
 
 ALTER TABLE focus_weeks ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own focus weeks" ON focus_weeks
+    FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+ALTER TABLE play_sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own play sessions" ON play_sessions
     FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- Storage bucket for cover images
@@ -104,3 +121,4 @@ CREATE POLICY "Users delete own covers" ON storage.objects
 ALTER PUBLICATION supabase_realtime ADD TABLE games;
 ALTER PUBLICATION supabase_realtime ADD TABLE game_notes;
 ALTER PUBLICATION supabase_realtime ADD TABLE focus_weeks;
+ALTER PUBLICATION supabase_realtime ADD TABLE play_sessions;

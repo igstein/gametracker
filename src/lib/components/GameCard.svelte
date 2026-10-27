@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { Game } from '$lib/types';
-	import { getTargetHours, getColdDays } from '$lib/utils';
+	import type { Game, LatestNote } from '$lib/types';
+	import { getTargetHours, getColdDays, formatDaysAgo } from '$lib/utils';
 	import { PRIORITY_CONFIG } from '$lib/constants';
 	import QuickAddButton from './QuickAddButton.svelte';
 	import StarRating from './StarRating.svelte';
@@ -8,6 +8,7 @@
 	export let game: Game;
 	export let onClick: () => void;
 	export let onQuickAdd: ((game: Game) => void) | null = null;
+	export let lastNote: LatestNote | undefined = undefined;
 
 	$: coldDays = getColdDays(game);
 
@@ -86,6 +87,12 @@
 				<QuickAddButton onAdd={() => onQuickAdd?.(game)} />
 			{/if}
 		</div>
+		{/if}
+
+		{#if lastNote}
+			<p class="mt-2 text-[10px] leading-snug text-gray-500 dark:text-gray-400 line-clamp-2" title={lastNote.text}>
+				📝 <span class="text-gray-400 dark:text-gray-500">{formatDaysAgo(lastNote.at)} ·</span> {lastNote.text}
+			</p>
 		{/if}
 	</div>
 </div>

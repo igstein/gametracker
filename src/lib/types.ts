@@ -59,6 +59,21 @@ export interface GameNote {
 	updated_at: string;
 }
 
+export interface PlaySession {
+	id: string;
+	game_id: string;
+	user_id: string;
+	hours: number;
+	note?: string | null;
+	played_at: string;
+}
+
+// Most recent journal text for a game (from a journal entry or a session note)
+export interface LatestNote {
+	text: string;
+	at: string;
+}
+
 export interface HLTBSearchResult {
 	id: number;
 	title: string;

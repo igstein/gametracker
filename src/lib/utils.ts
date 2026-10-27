@@ -128,3 +128,11 @@ export function getColdDays(game: Game): number | null {
 	const days = Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000);
 	return days >= COLD_AFTER_DAYS ? days : null;
 }
+
+/** "today", "yesterday" or "12d ago" */
+export function formatDaysAgo(date: string): string {
+	const days = Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000);
+	if (days <= 0) return 'today';
+	if (days === 1) return 'yesterday';
+	return `${days}d ago`;
+}

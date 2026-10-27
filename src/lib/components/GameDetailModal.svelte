@@ -2,7 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { isOnline } from '$lib/stores/network';
-	import type { Game, GameStatus, GamePriority, GameGenre, GameNote, HLTBSearchResult } from '$lib/types';
+	import type { Game, GameStatus, GamePriority, GameGenre, GameNote, HLTBSearchResult, PlaySession } from '$lib/types';
 	import GameGuide from './GameGuide.svelte';
 	import StarRating from './StarRating.svelte';
 
@@ -23,6 +23,7 @@
 		getNotesFromLocal,
 		addToSyncQueue
 	} from '$lib/services/offline';
+	import { insertSession, updateSession, deleteSession } from '$lib/services/sessions';
 
 	export let game: Game | null;
 	export let open = false;
@@ -40,6 +41,8 @@
 
 	// Pending whole-hour change, applied on Update
 	let playtimeDelta = 0;
+	// Optional note saved with the play session for a positive change
+	let sessionNote = '';
 	let status: GameStatus = 'backlog';
 	let priority: GamePriority = 'medium';
 	let saving = false;
@@ -76,7 +79,21 @@
 	let noteTitle = '';
 	let noteContent = '';
 	let editingNoteId: string | null = null;
+	// Session notes are edited in the same form, without a title
+	let editingSessionId: string | null = null;
+	let sessionNotes: PlaySession[] = [];
 	let notesRealtimeChannel: RealtimeChannel | null = null;
+
+	// Journal entries and session notes in one timeline, newest first
+	type JournalItem =
+		| { kind: 'note'; id: string; at: string; note: GameNote }
+		| { kind: 'session'; id: string; at: string; session: PlaySession };
+	$: journalItems = [
+		...notes.map((note): JournalItem => ({ kind: 'note', id: note.id, at: note.created_at, note })),
+		...sessionNotes.map(
+			(session): JournalItem => ({ kind: 'session', id: session.id, at: session.played_at, session })
+		)
+	].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
 	// Reset local values only when a different game is opened. In-modal edits
 	// (target, genres, platforms...) and realtime syncs replace the `game` object
@@ -88,11 +105,14 @@
 		status = game.status;
 		priority = game.priority;
 		playtimeDelta = 0;
+		sessionNote = '';
 		// Reset note form state
 		showAddNote = false;
 		noteTitle = '';
 		noteContent = '';
 		editingNoteId = null;
+		editingSessionId = null;
+		sessionNotes = [];
 		confirmingDelete = false;
 		showFocusWarning = false;
 		editingTarget = false;
@@ -144,8 +164,23 @@
 		saving = true;
 		error = '';
 
+		// Log the play session first, so a typed note isn't lost if logging fails
+		let sessionId: string | null = null;
 		try {
 			const newPlayedHours = Math.max(0, game.played_hours + playtimeDelta);
+			const delta = newPlayedHours - game.played_hours;
+			if (delta !== 0) {
+				sessionId = crypto.randomUUID();
+				await insertSession(supabase, {
+					id: sessionId,
+					game_id: game.id,
+					user_id: $page.data.user!.id,
+					hours: delta,
+					note: (delta > 0 && sessionNote.trim()) || null,
+					played_at: new Date().toISOString()
+				});
+			}
+
 			const justFinished = status === 'finished' && game.status !== 'finished';
 			const changes = {
 				played_hours: newPlayedHours,
@@ -160,7 +195,14 @@
 				.update(changes)
 				.eq('id', game.id);
 
-			if (updateError) throw updateError;
+			if (updateError) {
+				if (sessionId) {
+					deleteSession(supabase, sessionId).catch((e) =>
+						console.error('Failed to remove play session:', e)
+					);
+				}
+				throw updateError;
+			}
 
 			const updatedGame = { ...game, ...changes };
 			onGameUpdated();
@@ -335,6 +377,7 @@
 				if (fetchError) throw fetchError;
 
 				notes = data || [];
+				await loadSessionNotes();
 			} else {
 				// Offline: load from IndexedDB
 				console.log('[Offline] Loading notes from local cache');
@@ -355,10 +398,29 @@
 		}
 	}
 
+	// Session notes are only loaded online; offline the journal shows cached entries only
+	async function loadSessionNotes() {
+		if (!game) return;
+		const gameId = game.id;
+		try {
+			const { data, error: fetchError } = await supabase
+				.from('play_sessions')
+				.select('*')
+				.eq('game_id', gameId)
+				.not('note', 'is', null)
+				.order('played_at', { ascending: false });
+			if (fetchError) throw fetchError;
+			if (game?.id === gameId) sessionNotes = data || [];
+		} catch (e) {
+			console.error('Error loading session notes:', e);
+		}
+	}
+
 	function openAddNote() {
 		noteTitle = '';
 		noteContent = '';
 		editingNoteId = null;
+		editingSessionId = null;
 		showAddNote = true;
 	}
 
@@ -366,6 +428,15 @@
 		noteTitle = note.title || '';
 		noteContent = note.content;
 		editingNoteId = note.id;
+		editingSessionId = null;
+		showAddNote = true;
+	}
+
+	function openEditSessionNote(session: PlaySession) {
+		noteTitle = '';
+		noteContent = session.note ?? '';
+		editingNoteId = null;
+		editingSessionId = session.id;
 		showAddNote = true;
 	}
 
@@ -374,6 +445,18 @@
 		noteTitle = '';
 		noteContent = '';
 		editingNoteId = null;
+		editingSessionId = null;
+	}
+
+	// Removing a session note keeps the session, so the logged hours stay
+	async function removeSessionNote(sessionId: string) {
+		if (!confirm('Remove this session note? The logged hours stay.')) return;
+		try {
+			await updateSession(supabase, sessionId, { note: null });
+			sessionNotes = sessionNotes.filter((s) => s.id !== sessionId);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to remove note';
+		}
 	}
 
 	async function saveNote() {
@@ -381,6 +464,20 @@
 
 		saving = true;
 		error = '';
+
+		if (editingSessionId) {
+			try {
+				const note = noteContent.trim();
+				await updateSession(supabase, editingSessionId, { note });
+				sessionNotes = sessionNotes.map((s) => (s.id === editingSessionId ? { ...s, note } : s));
+				cancelNoteEdit();
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Failed to save note';
+			} finally {
+				saving = false;
+			}
+			return;
+		}
 
 		try {
 			if (!$page.data.user) {
@@ -527,6 +624,16 @@
 						notes = notes.filter((n) => n.id !== deletedNote.id);
 					}
 				}
+			)
+			.on(
+				'postgres_changes',
+				{
+					event: '*',
+					schema: 'public',
+					table: 'play_sessions',
+					filter: `game_id=eq.${game.id}`
+				},
+				() => loadSessionNotes()
 			)
 			.subscribe((status) => {
 				console.log('Notes realtime status:', status);
@@ -1032,6 +1139,15 @@
 							{/if}
 						</p>
 					</div>
+					{#if playtimeDelta > 0}
+						<input
+							type="text"
+							bind:value={sessionNote}
+							placeholder="Anything to remember? (optional, goes to your journal)"
+							maxlength="500"
+							class="mt-3 w-full px-3 py-2 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm placeholder-gray-400"
+						/>
+					{/if}
 				</div>
 				{/if}
 
@@ -1182,12 +1298,14 @@
 				{#if showAddNote}
 					<div class="bg-gray-700 rounded-lg p-4 mb-4">
 						<div class="space-y-3">
-							<input
-								type="text"
-								bind:value={noteTitle}
-								placeholder="Title (optional)"
-								class="w-full px-3 py-2 bg-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-							/>
+							{#if !editingSessionId}
+								<input
+									type="text"
+									bind:value={noteTitle}
+									placeholder="Title (optional)"
+									class="w-full px-3 py-2 bg-gray-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+								/>
+							{/if}
 							<textarea
 								bind:value={noteContent}
 								placeholder="What's on your mind about this game?"
@@ -1207,7 +1325,7 @@
 									disabled={saving || !noteContent.trim()}
 									class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
 								>
-									{saving ? 'Saving...' : editingNoteId ? 'Update' : 'Save'}
+									{saving ? 'Saving...' : editingNoteId || editingSessionId ? 'Update' : 'Save'}
 								</button>
 							</div>
 						</div>
@@ -1217,9 +1335,36 @@
 				<!-- Notes List -->
 				{#if loadingNotes}
 					<p class="text-gray-400 text-sm text-center py-4">Loading journal entries...</p>
-				{:else if notes.length > 0}
+				{:else if journalItems.length > 0}
 					<div class="space-y-4">
-						{#each notes as note (note.id)}
+						{#each journalItems as item (item.id)}
+							{#if item.kind === 'session'}
+								{@const session = item.session}
+								<div class="bg-gray-700/60 border border-gray-600 rounded-lg p-4">
+									<div class="flex justify-between items-start mb-2">
+										<p class="text-gray-400 text-xs">
+											<span class="text-green-400 font-medium">🎮 {session.hours > 0 ? '+' : ''}{session.hours}h session</span>
+											· {formatDate(session.played_at)}
+										</p>
+										<div class="flex gap-2">
+											<button
+												on:click={() => openEditSessionNote(session)}
+												class="text-blue-400 hover:text-blue-300 text-xs"
+											>
+												Edit
+											</button>
+											<button
+												on:click={() => removeSessionNote(session.id)}
+												class="text-red-400 hover:text-red-300 text-xs"
+											>
+												Remove
+											</button>
+										</div>
+									</div>
+									<p class="text-gray-300 text-sm whitespace-pre-wrap">{session.note}</p>
+								</div>
+							{:else}
+							{@const note = item.note}
 							<div class="bg-gray-700 rounded-lg p-4">
 								<div class="flex justify-between items-start mb-2">
 									<div class="flex-1">
@@ -1245,6 +1390,7 @@
 								</div>
 								<p class="text-gray-300 text-sm whitespace-pre-wrap">{note.content}</p>
 							</div>
+							{/if}
 						{/each}
 					</div>
 				{:else}
