@@ -3,6 +3,7 @@
 	import type { Game, GameStatus, GamePriority, HLTBSearchResult } from '$lib/types';
 	import { STATUS_CONFIG } from '$lib/constants';
 	import { searchHLTB } from '$lib/services/hltbClient';
+	import PriorityPicker from './PriorityPicker.svelte';
 
 	export let open = false;
 	export let onClose: () => void;
@@ -491,19 +492,8 @@
 					</div>
 
 					<div>
-						<label for="priority" class="block text-sm font-medium text-gray-300 mb-2">
-							Priority
-						</label>
-						<select
-							id="priority"
-							bind:value={priority}
-							class="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-						>
-							<option value="must_play">★ Must Play</option>
-							<option value="high">● High</option>
-							<option value="medium">● Medium</option>
-							<option value="low">○ Low</option>
-						</select>
+						<span id="add-priority-label" class="block text-sm font-medium text-gray-300 mb-2">Priority</span>
+						<PriorityPicker bind:value={priority} labelId="add-priority-label" />
 					</div>
 
 					{#if error}

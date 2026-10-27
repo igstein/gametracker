@@ -5,6 +5,7 @@
 	import type { Game, GameStatus, GamePriority, GameGenre, GameNote, HLTBSearchResult, PlaySession } from '$lib/types';
 	import GameGuide from './GameGuide.svelte';
 	import StarRating from './StarRating.svelte';
+	import PriorityPicker from './PriorityPicker.svelte';
 
 	const GENRES: GameGenre[] = [
 		'Action', 'Action RPG', 'Adventure', 'Card Game', 'Fighting', 'First Person Shooter',
@@ -796,13 +797,13 @@
 		tabindex="-1"
 	>
 		<div class="bg-gray-800 rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-			<div class="flex items-start justify-between mb-6">
-				<div>
+			<div class="flex items-start justify-between gap-4 mb-6">
+				<div class="min-w-0 flex-1">
 					<h2 class="text-2xl font-bold text-white mb-2">{game.title}</h2>
 					<div class="flex items-center gap-2 text-sm text-gray-400">
 						<span>Status: {status}</span>
 						<span>•</span>
-						<span>Priority: {PRIORITY_CONFIG[priority].icon} {PRIORITY_CONFIG[priority].label}</span>
+						<span>Priority: <span style="color: {PRIORITY_CONFIG[priority].hexColor}">{PRIORITY_CONFIG[priority].icon}</span> {PRIORITY_CONFIG[priority].label}</span>
 					</div>
 					{#if game.status === 'finished'}
 						<div class="mt-2 flex items-center gap-2 flex-wrap">
@@ -952,6 +953,13 @@
 						{/if}
 					</div>
 				</div>
+				{#if game.cover_image_url}
+					<img
+						src={game.cover_image_url}
+						alt={game.title}
+						class="w-20 sm:w-28 aspect-[2/3] object-cover rounded-lg shadow-lg flex-shrink-0"
+					/>
+				{/if}
 			</div>
 
 			<!-- Progress Section (hidden for wishlist) -->
@@ -1169,17 +1177,8 @@
 
 				<!-- Priority -->
 				<div>
-					<label for="priority" class="block text-sm font-medium text-gray-300 mb-2">Priority</label>
-					<select
-						id="priority"
-						bind:value={priority}
-						class="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-					>
-						<option value="must_play">★ Must Play</option>
-						<option value="high">● High</option>
-						<option value="medium">● Medium</option>
-						<option value="low">○ Low</option>
-					</select>
+					<span id="priority-label" class="block text-sm font-medium text-gray-300 mb-2">Priority</span>
+					<PriorityPicker bind:value={priority} labelId="priority-label" />
 				</div>
 
 				{#if error}
